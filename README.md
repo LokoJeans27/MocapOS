@@ -76,9 +76,9 @@ Camera overlay + 3D global view, side by side:
 
 ![side by side](docs/demos/good_01_compare.gif)
 
-| 3D global (mesh only) | Camera overlay with hands |
+| Camera overlay + hands | Camera overlay + hands |
 |:---:|:---:|
-| ![3D global](docs/demos/good_03_global.gif) | ![overlay](docs/demos/good_02_overlay.gif) |
+| ![overlay](docs/demos/good_02_overlay.gif) | ![overlay](docs/demos/good_03_overlay.gif) |
 
 ### Where it struggles
 
