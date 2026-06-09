@@ -31,7 +31,8 @@ downloaded automatically and matched to your GPU.
    - Download + verify the public tracking models (~12 GB, hash-checked).
    - Run a self-test and create a Desktop shortcut.
 3. **Licensed models (one-time):** SMPL/SMPL-X (body) and MANO (hands) are **not**
-   included (Max Planck license). Download them yourself:
+   included (Max Planck license). The GUI has a one-click importer for each — full
+   step-by-step in **[docs/INSTALL_GUIDE.md](docs/INSTALL_GUIDE.md)**. In short:
    - SMPL-X: <https://smpl-x.is.tue.mpg.de/> · SMPL: <https://smpl.is.tue.mpg.de/>
      → point the GUI to them (Settings > Body Models).
    - MANO: <https://mano.is.tue.mpg.de/> → copy `MANO_LEFT.pkl` + `MANO_RIGHT.pkl`
@@ -58,6 +59,33 @@ SMPL / SMPL-X ── downloaded by the user (licensed)
 The portable environments are hosted on Hugging Face at
 [`LokoJeans/mocapos-envs`](https://huggingface.co/LokoJeans/mocapos-envs)
 and fetched by `setup.bat`. Nothing heavy ever lives in git.
+
+---
+
+## Demo / Results
+
+These are **raw outputs straight from the model** on complex dance footage — no cleanup
+at all. As with any motion capture, real production use still needs the usual pass:
+cleaning curves, smoothing frames, fixing/retiming bad frames, etc. Shown here just to
+illustrate what the pipeline produces out of the box. *(Clips are heavily compressed for
+preview; click to play.)*
+
+**Good results** (body + hands on fast dance):
+
+| Demo | What it shows |
+|------|---------------|
+| [▶ side-by-side](docs/demos/good_01_compare.mp4) | Camera overlay + 3D global view together |
+| [▶ overlay 1](docs/demos/good_01_overlay.mp4) · [▶ overlay 2](docs/demos/good_02_overlay.mp4) · [▶ overlay 3](docs/demos/good_03_overlay.mp4) | Mesh + hands rendered over the original frames |
+| [▶ 3D global](docs/demos/good_03_global.mp4) | World-grounded mesh on the ground plane (no source footage) |
+
+**Where it struggles** (the model is not magic — fast, ambiguous or occluded motion is hard):
+
+| Demo | What it shows |
+|------|---------------|
+| [▶ overlay](docs/demos/limits_overlay.mp4) · [▶ side-by-side](docs/demos/limits_compare.mp4) | A harder clip where tracking drifts / hands get noisy — a good example of where manual cleanup is needed |
+
+> Dance clips are used because the motion is genuinely hard to follow, yet the result is
+> still a solid starting point. They are shown for research/demonstration only.
 
 ---
 
