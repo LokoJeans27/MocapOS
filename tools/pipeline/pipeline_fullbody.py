@@ -720,6 +720,12 @@ if __name__ == "__main__":
     video_path = Path(args.video).resolve()
     assert video_path.exists(), f"Video not found: {video_path}"
 
+    # Hands (HaMeR) need the licensed MANO models. If they're absent, we still produce
+    # a full BODY result and skip the hand stage, instead of crashing.
+    mano_ok = (GVHMR_ROOT / "hamer_lib" / "_DATA" / "data" / "mano" / "MANO_RIGHT.pkl").exists()
+    if not mano_ok:
+        Log.info("[MANO] Hand models not found -> producing BODY-only output (hands skipped).")
+
     # Set CWD to GVHMR root for relative path resolution
     os.chdir(GVHMR_ROOT)
 
@@ -732,7 +738,9 @@ if __name__ == "__main__":
         Log.info("=" * 60)
         Log.info("[Step 1/3] Running GVHMR body prediction...")
         Log.info("=" * 60)
-        cmd = [sys.executable, "-u", "tools/pipeline/pipeline.py", "--video", str(video_path), "--skip_render"]
+        cmd = [sys.executable, "-u", "tools/pipeline/pipeline.py", "--video", str(video_path)]
+        if mano_ok:
+            cmd.append("--skip_render")  # the hand stage (Step 3) will do the final render
         if args.static_cam:
             cmd.append("-s")
         if args.f_mm:
@@ -764,6 +772,17 @@ if __name__ == "__main__":
     cfg.paths.hmr4d_results = str(output_dir / "hmr4d_results.pt")
     cfg.paths.incam_video = str(output_dir / "1_incam.mp4")
     cfg.paths.global_video = str(output_dir / "2_global.mp4")
+
+    # If MANO is missing, stop here: the body-only videos were already rendered in Step 1.
+    if not mano_ok:
+        Log.info("=" * 60)
+        Log.info("[Hands SKIPPED] MANO models not found at hamer_lib/_DATA/data/mano/")
+        Log.info("  Body capture is complete. To add hands, download MANO (licensed, free):")
+        Log.info("    https://mano.is.tue.mpg.de/  ->  copy MANO_LEFT.pkl + MANO_RIGHT.pkl")
+        Log.info("    into hamer_lib/_DATA/data/mano/  and re-run.")
+        Log.info("=" * 60)
+        Log.info(f"[Done! Body only] Output dir: {cfg.output_dir}")
+        sys.exit(0)
 
     # ===== Step 2: Run HaMeR hand prediction ===== #
     Log.info("=" * 60)
