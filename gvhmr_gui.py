@@ -1400,6 +1400,8 @@ class MocapOSApp(ctk.CTk):
             "SMPLX Neutral": "inputs/checkpoints/body_models/smplx/SMPLX_NEUTRAL.npz",
             "SMPL Neutral": "inputs/checkpoints/body_models/smpl/SMPL_NEUTRAL.pkl",
             "HaMeR": "hamer_lib/_DATA/hamer_ckpts/checkpoints/hamer.ckpt",
+            "MANO Right (hands)": "hamer_lib/_DATA/data/mano/MANO_RIGHT.pkl",
+            "MANO Left (hands)": "hamer_lib/_DATA/data/mano/MANO_LEFT.pkl",
         }
         for name, path in checkpoints.items():
             row = ctk.CTkFrame(ckpt_inner, fg_color="transparent")
