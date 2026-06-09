@@ -30,10 +30,13 @@ downloaded automatically and matched to your GPU.
    - Download the portable env (~5 GB, **one-time**) from Hugging Face.
    - Download + verify the public tracking models (~12 GB, hash-checked).
    - Run a self-test and create a Desktop shortcut.
-3. **Body models (one-time, licensed):** SMPL and SMPL-X are **not** included
-   (Max Planck license). Download them yourself and point the GUI to them:
-   - SMPL-X: <https://smpl-x.is.tue.mpg.de/>
-   - SMPL: <https://smpl.is.tue.mpg.de/>
+3. **Licensed models (one-time):** SMPL/SMPL-X (body) and MANO (hands) are **not**
+   included (Max Planck license). Download them yourself:
+   - SMPL-X: <https://smpl-x.is.tue.mpg.de/> · SMPL: <https://smpl.is.tue.mpg.de/>
+     → point the GUI to them (Settings > Body Models).
+   - MANO: <https://mano.is.tue.mpg.de/> → copy `MANO_LEFT.pkl` + `MANO_RIGHT.pkl`
+     into `hamer_lib/_DATA/data/mano/`. Without MANO the **body** still works; only
+     **hand** capture is skipped.
 
 When the self-test prints `RESULT: READY`, launch MocapOS from the Desktop icon.
 

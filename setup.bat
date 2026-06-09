@@ -116,18 +116,29 @@ if errorlevel 1 (
 )
 echo.
 
-:: ---------- 5. Body models notice (licensed, user-supplied) ----------
-echo [5/6] Checking body models ^(SMPL / SMPL-X^)...
+:: ---------- 5. Licensed models notice (SMPL / SMPL-X body + MANO hands) ----------
+echo [5/6] Checking licensed models ^(SMPL / SMPL-X body, MANO hands^)...
 set "BODYMISSING=0"
 if not exist "%APP%\inputs\checkpoints\body_models\smplx\SMPLX_NEUTRAL.npz" set "BODYMISSING=1"
 if not exist "%APP%\inputs\checkpoints\body_models\smpl\SMPL_NEUTRAL.pkl" set "BODYMISSING=1"
+set "MANOMISSING=0"
+if not exist "%APP%\hamer_lib\_DATA\data\mano\MANO_RIGHT.pkl" set "MANOMISSING=1"
 if "!BODYMISSING!"=="1" (
-    echo   SMPL / SMPL-X are NOT included ^(Max Planck license - you download them once^).
+    echo   SMPL / SMPL-X ^(body^) NOT included ^(Max Planck license - download once^).
     echo   After MocapOS opens: Settings ^> Body Models, and follow the importer.
     echo     SMPL-X: https://smpl-x.is.tue.mpg.de/   ^(NPZ+PKL 830 MB^)
     echo     SMPL:   https://smpl.is.tue.mpg.de/      ^(v1.1.0, 247 MB^)
 ) else (
     echo   Body models present.
+)
+if "!MANOMISSING!"=="1" (
+    echo   MANO ^(hands^) NOT included ^(Max Planck license - download once^).
+    echo   Register, download "Models ^& Code", and copy MANO_LEFT.pkl + MANO_RIGHT.pkl to:
+    echo     %APP%\hamer_lib\_DATA\data\mano\
+    echo     MANO: https://mano.is.tue.mpg.de/
+    echo   ^(Without MANO the body still works; only hand capture is skipped.^)
+) else (
+    echo   MANO hand models present.
 )
 echo.
 

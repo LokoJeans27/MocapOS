@@ -44,15 +44,21 @@
     },
     {
       "path": "hamer_lib/_DATA/hamer_ckpts/model_config.yaml",
-      "url": "https://huggingface.co/spaces/geopavlakos/HaMeR/resolve/main/_DATA/hamer_ckpts/model_config.yaml",
-      "size": 2084,
-      "sha256": "2217f6bcf27ae4c074e2a33a3409d822bbfd02931373deedb9f71287adeabe16"
+      "url": "https://huggingface.co/LokoJeans/mocapos-envs/resolve/main/hamer_data/model_config.yaml",
+      "size": 2072,
+      "sha256": "0e5eeb82752e47dfd01db8e13ccc4c5eba9bf83f53da8285523b8d3e87247aa3"
     },
     {
       "path": "hamer_lib/_DATA/hamer_ckpts/dataset_config.yaml",
       "url": "https://huggingface.co/spaces/geopavlakos/HaMeR/resolve/main/_DATA/hamer_ckpts/dataset_config.yaml",
       "size": 1369,
       "sha256": "392d10aece296152769328f14bb1c0137d6ea2f50f7e69f716ee00e9ad6ac343"
+    },
+    {
+      "path": "hamer_lib/_DATA/data/mano_mean_params.npz",
+      "url": "https://huggingface.co/LokoJeans/mocapos-envs/resolve/main/hamer_data/mano_mean_params.npz",
+      "size": 1178,
+      "sha256": "efc0ec58e4a5cef78f3abfb4e8f91623b8950be9eff8b8e0dbb0d036ebc63988"
     }
   ]
 }
