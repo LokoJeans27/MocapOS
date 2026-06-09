@@ -173,6 +173,7 @@ TRANSLATIONS = {
         "setup_msg": "Some models are not installed yet:\n\n  Required (body render): {req}\n  Hands (optional): {mano}\n\nUse the importers on this Settings page to install them. Once installed, this notice won't appear again.",
         "check_gpu": "🎮 Check GPU Info",
         "open_proj": "📂 Open Project Folder",
+        "uninstall": "🗑 Uninstall / Free space",
         "console": "Console Output",
         "show_console": "Show Console ▼",
         "hide_console": "Hide Console ▲",
@@ -285,6 +286,7 @@ TRANSLATIONS = {
         "setup_msg": "Aún faltan modelos por instalar:\n\n  Obligatorios (render del cuerpo): {req}\n  Manos (opcional): {mano}\n\nUsa los importadores de esta página de Ajustes para instalarlos. Una vez instalados, este aviso no volverá a aparecer.",
         "check_gpu": "🎮 Verificar GPU",
         "open_proj": "📂 Abrir Carpeta del Proyecto",
+        "uninstall": "🗑 Desinstalar / Liberar espacio",
         "console": "Salida de Consola",
         "show_console": "Mostrar Consola ▼",
         "hide_console": "Ocultar Consola ▲",
@@ -397,6 +399,7 @@ TRANSLATIONS = {
         "setup_msg": "Certains modèles ne sont pas encore installés :\n\n  Requis (rendu du corps) : {req}\n  Mains (optionnel) : {mano}\n\nUtilisez les importateurs de cette page Paramètres pour les installer. Une fois installés, cet avis ne réapparaîtra plus.",
         "check_gpu": "🎮 Vérifier le GPU",
         "open_proj": "📂 Ouvrir le Dossier du Projet",
+        "uninstall": "🗑 Désinstaller / Libérer de l'espace",
         "console": "Sortie Console",
         "show_console": "Afficher Console ▼",
         "hide_console": "Masquer Console ▲",
@@ -509,6 +512,7 @@ TRANSLATIONS = {
         "setup_msg": "Alguns modelos ainda não estão instalados:\n\n  Obrigatórios (render do corpo): {req}\n  Mãos (opcional): {mano}\n\nUse os importadores desta página de Configurações para instalá-los. Depois de instalados, este aviso não aparecerá mais.",
         "check_gpu": "🎮 Verificar GPU",
         "open_proj": "📂 Abrir Pasta do Projeto",
+        "uninstall": "🗑 Desinstalar / Liberar espaço",
         "console": "Saída do Console",
         "show_console": "Mostrar Console ▼",
         "hide_console": "Ocultar Console ▲",
@@ -1507,8 +1511,28 @@ class MocapOSApp(ctk.CTk):
                       fg_color=Colors.SUCCESS, hover_color=Colors.SUCCESS_HOVER,
                       text_color="#000000", font=ctk.CTkFont(weight="bold"),
                       command=lambda: os.startfile(str(PROJ_ROOT))).pack(side="left")
+        ctk.CTkButton(btn, text=self._t("uninstall"), height=44, width=200,
+                      fg_color=Colors.MUTED, hover_color=Colors.ERROR,
+                      text_color=Colors.TEXT, font=ctk.CTkFont(weight="bold"),
+                      command=self._uninstall).pack(side="left", padx=(12, 0))
 
         self._build_console(parent)
+
+    def _uninstall(self):
+        bat = PROJ_ROOT / "uninstall.bat"
+        if not bat.exists():
+            messagebox.showerror("Uninstall", "uninstall.bat was not found in the project folder.")
+            return
+        if messagebox.askyesno(
+            "Uninstall / Free space",
+            "This opens the uninstaller in a new window, with two options:\n\n"
+            "   1) Free up space  - delete the portable environment + downloads,\n"
+            "        keep your code and models.\n"
+            "   2) Full uninstall - remove everything.\n\n"
+            "Tip: close MocapOS first so all files can be removed.\n\n"
+            "Open the uninstaller now?"
+        ):
+            os.startfile(str(bat))
 
     # ═══════════════════════════════════════════════════════
     # BODY MODEL IMPORTERS

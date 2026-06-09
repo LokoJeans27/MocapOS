@@ -60,6 +60,19 @@ The portable environments are hosted on Hugging Face at
 [`LokoJeans/mocapos-envs`](https://huggingface.co/LokoJeans/mocapos-envs)
 and fetched by `setup.bat`. Nothing heavy ever lives in git.
 
+## Uninstall / free up space
+
+MocapOS is **portable — it installs nothing in Windows**. Everything it downloads lives
+inside the project folder, so removing it is clean. Run **`uninstall.bat`** (or in the GUI:
+*Settings → 🗑 Uninstall / Free space*) and pick:
+
+- **Free up space (~13 GB)** — deletes the portable environment + the downloaded archive +
+  outputs, but **keeps your code and models** (incl. licensed SMPL/SMPL-X/MANO). Re-run
+  `setup.bat` later to use it again.
+- **Full uninstall** — removes everything and leaves the folder empty for you to delete.
+
+Your original input videos are never touched.
+
 ---
 
 ## Demo / Results
