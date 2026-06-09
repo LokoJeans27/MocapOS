@@ -64,28 +64,40 @@ and fetched by `setup.bat`. Nothing heavy ever lives in git.
 
 ## Demo / Results
 
-These are **raw outputs straight from the model** on complex dance footage — no cleanup
-at all. As with any motion capture, real production use still needs the usual pass:
-cleaning curves, smoothing frames, fixing/retiming bad frames, etc. Shown here just to
-illustrate what the pipeline produces out of the box. *(Clips are heavily compressed for
-preview; click to play.)*
+Raw outputs **straight from the model** on complex dance footage — **no cleanup at all**.
+As with any motion capture, real production use still needs the usual pass (cleaning
+curves, smoothing frames, fixing/retiming bad frames). Shown here just to illustrate what
+the pipeline produces out of the box. *(Previews are short, low-fps GIFs — full-quality
+MP4 links below.)*
 
-**Good results** (body + hands on fast dance):
+### Good results — body + hands on fast dance
 
-| Demo | What it shows |
-|------|---------------|
-| [▶ side-by-side](docs/demos/good_01_compare.mp4) | Camera overlay + 3D global view together |
-| [▶ overlay 1](docs/demos/good_01_overlay.mp4) · [▶ overlay 2](docs/demos/good_02_overlay.mp4) · [▶ overlay 3](docs/demos/good_03_overlay.mp4) | Mesh + hands rendered over the original frames |
-| [▶ 3D global](docs/demos/good_03_global.mp4) | World-grounded mesh on the ground plane (no source footage) |
+Camera overlay + 3D global view, side by side:
 
-**Where it struggles** (the model is not magic — fast, ambiguous or occluded motion is hard):
+![side by side](docs/demos/good_01_compare.gif)
 
-| Demo | What it shows |
-|------|---------------|
-| [▶ overlay](docs/demos/limits_overlay.mp4) · [▶ side-by-side](docs/demos/limits_compare.mp4) | A harder clip where tracking drifts / hands get noisy — a good example of where manual cleanup is needed |
+| 3D global (mesh only) | Camera overlay with hands |
+|:---:|:---:|
+| ![3D global](docs/demos/good_03_global.gif) | ![overlay](docs/demos/good_02_overlay.gif) |
+
+### Where it struggles
+
+The model isn't magic — fast, ambiguous or occluded motion drifts and hands get noisy.
+A good example of where manual cleanup would be needed:
+
+![limits](docs/demos/limits_compare.gif)
+
+**Full-quality MP4s:**
+[side-by-side](docs/demos/good_01_compare.mp4) ·
+[overlay 1](docs/demos/good_01_overlay.mp4) ·
+[overlay 2](docs/demos/good_02_overlay.mp4) ·
+[overlay 3](docs/demos/good_03_overlay.mp4) ·
+[3D global](docs/demos/good_03_global.mp4) ·
+[limits overlay](docs/demos/limits_overlay.mp4) ·
+[limits side-by-side](docs/demos/limits_compare.mp4)
 
 > Dance clips are used because the motion is genuinely hard to follow, yet the result is
-> still a solid starting point. They are shown for research/demonstration only.
+> still a solid starting point. Shown for research/demonstration only.
 
 ---
 
