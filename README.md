@@ -136,3 +136,15 @@ the original works:
 - MocapOS-authored code: [PolyForm Noncommercial 1.0.0](LICENSE-MocapOS.md)
 - GVHMR (preserved): [`LICENSE`](LICENSE)
 - All bundled components: [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md)
+
+---
+
+## Author
+
+Made by **Jean Sebastián Rubio** — VFX Supervisor & technical artist.
+
+[![Website](https://img.shields.io/badge/Website-jeansebastianrubio.com-0a66c2?style=for-the-badge)](https://jeansebastianrubio.com)
+[![GitHub](https://img.shields.io/badge/GitHub-LokoJeans27-181717?style=for-the-badge&logo=github)](https://github.com/LokoJeans27)
+
+MocapOS is a personal, non-commercial passion project — *amor al arte*. If it's useful to
+you, a ⭐ on the repo is always appreciated.
