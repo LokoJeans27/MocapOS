@@ -1,0 +1,56 @@
+============================================================
+  MocapOS - Instalacion (version portable)
+  Captura de movimiento de cuerpo completo + manos
+============================================================
+
+REQUISITOS
+  - Windows 10/11 de 64 bits
+  - GPU NVIDIA (GTX 1000, RTX 2000/3000/4000/5000)
+  - Driver NVIDIA actualizado (>= 525). Bajalo de https://www.nvidia.com/drivers
+  - ~30 GB libres en disco
+  - Internet la primera vez (para bajar los modelos de IA, ~12 GB)
+
+  NO necesitas instalar Python, conda, CUDA ni compiladores. Todo viene listo.
+
+------------------------------------------------------------
+PASOS
+------------------------------------------------------------
+
+1) Copia a tu PC la carpeta "MocapOS_dist" completa desde el disco de red
+   (Z:\APPS\MocapOS_dist). Debe quedar con esta forma:
+
+       MocapOS_dist\
+         app\         <- la aplicacion
+         envs\        <- los entornos (env_cu124.tar.gz / env_cu128.tar.gz)
+
+   (No hace falta tocar "envs": setup.bat elige solo el correcto para tu GPU.)
+
+2) Entra a la carpeta "app" y haz doble clic en  setup.bat
+   - Detecta tu GPU y descomprime el entorno adecuado.
+   - Descarga y VERIFICA los modelos de IA (por hash; si algo se baja mal, lo
+     vuelve a bajar solo - ya no quedan "modelos invalidos").
+   - Crea el icono "MocapOS" en el Escritorio.
+   - Corre una auto-prueba al final.
+   La primera vez tarda segun tu internet (los modelos pesan ~12 GB).
+
+3) Modelos de cuerpo SMPL / SMPL-X (solo una vez, por licencia):
+   Estos NO se pueden redistribuir, los baja cada quien gratis tras registrarse.
+   - Abre MocapOS (icono del Escritorio).
+   - Ve a  Settings > Body Models  y sigue el importador (arrastras el zip).
+       SMPL-X: https://smpl-x.is.tue.mpg.de/   (boton "NPZ+PKL, 830 MB")
+       SMPL:   https://smpl.is.tue.mpg.de/      (Version 1.1.0, 247 MB)
+
+4) Listo. Abre MocapOS, elige tu video y dale a Inference.
+
+------------------------------------------------------------
+SI ALGO FALLA
+------------------------------------------------------------
+  - Vuelve a correr setup.bat (es seguro repetir: salta lo ya hecho y repara
+    lo que falte).
+  - Para un diagnostico, abre una consola en la carpeta "app" y corre:
+        env\python.exe tools\dev\selftest.py
+    Te dira exactamente que componente falla (GPU, modelos, etc.).
+  - "no kernel image is available": tu entorno no es el de tu GPU. Borra la
+    carpeta "app\env" y vuelve a correr setup.bat.
+  - Driver viejo: actualiza de https://www.nvidia.com/drivers y reinicia.
+============================================================

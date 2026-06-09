@@ -1,0 +1,10 @@
+﻿=== Model Download Log ===
+[2026-04-29 16:41:26] WARNING: gdown not found. Cannot auto-download from Google Drive.
+[2026-04-29 16:41:26] YOLOv8x already exists.
+[2026-04-29 16:41:26] FOUND: GVHMR checkpoint
+[2026-04-29 16:41:26] FOUND: HMR2 checkpoint
+[2026-04-29 16:41:26] FOUND: ViTPose checkpoint
+[2026-04-29 16:41:26] FOUND: YOLOv8x
+[2026-04-29 16:41:26] FOUND: DPVO checkpoint
+[2026-04-29 16:41:26] FOUND: HaMeR checkpoint
+[2026-04-29 16:41:26] === Model Download Finished ===

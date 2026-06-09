@@ -20,7 +20,7 @@ ckpt_path: inputs/checkpoints/gvhmr/gvhmr_siga24_release.ckpt
 # ================================ #
 
 video_name: ???
-output_root: outputs/demo
+output_root: outputs/results
 output_dir: "${output_root}/${video_name}"
 preprocess_dir: ${output_dir}/preprocess
 video_path: "${output_dir}/0_input_video.mp4"

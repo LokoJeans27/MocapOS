@@ -17,6 +17,10 @@ class CV2SIFTMather(BaseMatcher):
         kp0, des0 = self.sift.detectAndCompute(gray0, None)
         kp1, des1 = self.sift.detectAndCompute(gray1, None)
 
+        # Guard against empty descriptors (black/blank frames)
+        if des0 is None or des1 is None or len(des0) < 2 or len(des1) < 2:
+            return np.zeros((0, 2), dtype=np.float32), np.zeros((0, 2), dtype=np.float32)
+
         # Match descriptors using FLANN matcher (better for SIFT)
         FLANN_INDEX_KDTREE = 1
         index_params = dict(algorithm=FLANN_INDEX_KDTREE, trees=5)

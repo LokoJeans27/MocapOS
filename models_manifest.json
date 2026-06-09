@@ -1,0 +1,58 @@
+{
+  "models": [
+    {
+      "path": "inputs/checkpoints/gvhmr/gvhmr_siga24_release.ckpt",
+      "url": "https://huggingface.co/camenduru/GVHMR/resolve/main/gvhmr/gvhmr_siga24_release.ckpt",
+      "size": 163508011,
+      "sha256": "4fae7da2de388d5da3514cb27a2d003f364dacb280e9cf88972b710e589c6b91"
+    },
+    {
+      "path": "inputs/checkpoints/hmr2/epoch=10-step=25000.ckpt",
+      "url": "https://huggingface.co/camenduru/GVHMR/resolve/main/hmr2/epoch%3D10-step%3D25000.ckpt",
+      "size": 2709494041,
+      "sha256": "2dcf79638109781d1ae5f5c44fee5f55bc83291c210653feead9b7f04fa6f20e"
+    },
+    {
+      "path": "inputs/checkpoints/vitpose/vitpose-h-multi-coco.pth",
+      "url": "https://huggingface.co/camenduru/GVHMR/resolve/main/vitpose/vitpose-h-multi-coco.pth",
+      "size": 2549075546,
+      "sha256": "50e33f4077ef2a6bcfd7110c58742b24c5859b7798fb0eedd6d2215e0a8980bc"
+    },
+    {
+      "path": "inputs/checkpoints/dpvo/dpvo.pth",
+      "url": "https://huggingface.co/camenduru/GVHMR/resolve/main/dpvo/dpvo.pth",
+      "size": 14167743,
+      "sha256": "30d02dc2b88a321cf99aad8e4ea1152a44d791b5b65bf95ad036922819c0ff12"
+    },
+    {
+      "path": "inputs/checkpoints/yolo/yolov8x.pt",
+      "url": "https://huggingface.co/camenduru/GVHMR/resolve/main/yolo/yolov8x.pt",
+      "size": 136867539,
+      "sha256": "c4d5a3f000d771762f03fc8b57ebd0aae324aeaefdd6e68492a9c4470f2d1e8b"
+    },
+    {
+      "path": "hamer_lib/_DATA/hamer_ckpts/checkpoints/hamer.ckpt",
+      "url": "https://huggingface.co/spaces/geopavlakos/HaMeR/resolve/main/_DATA/hamer_ckpts/checkpoints/hamer.ckpt",
+      "size": 2689536166,
+      "sha256": "e5cc06f294d88a92dee24e603480aab04de532b49f0e08200804ee7d90e16f53"
+    },
+    {
+      "path": "hamer_lib/_DATA/vitpose_ckpts/vitpose+_huge/wholebody.pth",
+      "url": "https://huggingface.co/spaces/geopavlakos/HaMeR/resolve/main/_DATA/vitpose_ckpts/vitpose%2B_huge/wholebody.pth",
+      "size": 3807742341,
+      "sha256": "b0555e1e2392e6a2be2d9265368f344d70ccbfd656ad480aa5c1de2e604519c9"
+    },
+    {
+      "path": "hamer_lib/_DATA/hamer_ckpts/model_config.yaml",
+      "url": "https://huggingface.co/spaces/geopavlakos/HaMeR/resolve/main/_DATA/hamer_ckpts/model_config.yaml",
+      "size": 2072,
+      "sha256": "0e5eeb82752e47dfd01db8e13ccc4c5eba9bf83f53da8285523b8d3e87247aa3"
+    },
+    {
+      "path": "hamer_lib/_DATA/hamer_ckpts/dataset_config.yaml",
+      "url": "https://huggingface.co/spaces/geopavlakos/HaMeR/resolve/main/_DATA/hamer_ckpts/dataset_config.yaml",
+      "size": 1369,
+      "sha256": "392d10aece296152769328f14bb1c0137d6ea2f50f7e69f716ee00e9ad6ac343"
+    }
+  ]
+}

@@ -1,77 +1,88 @@
-# GVHMR: World-Grounded Human Motion Recovery via Gravity-View Coordinates
-### [Project Page](https://zju3dv.github.io/gvhmr) | [Paper](https://arxiv.org/abs/2409.06662)
+# MocapOS — Full Body + Hands Motion Capture
 
-> World-Grounded Human Motion Recovery via Gravity-View Coordinates  
-> [Zehong Shen](https://zehongs.github.io/)<sup>\*</sup>,
-[Huaijin Pi](https://phj128.github.io/)<sup>\*</sup>,
-[Yan Xia](https://isshikihugh.github.io/scholar),
-[Zhi Cen](https://scholar.google.com/citations?user=Xyy-uFMAAAAJ),
-[Sida Peng](https://pengsida.net/)<sup>†</sup>,
-[Zechen Hu](https://zju3dv.github.io/gvhmr),
-[Hujun Bao](http://www.cad.zju.edu.cn/home/bao/),
-[Ruizhen Hu](https://csse.szu.edu.cn/staff/ruizhenhu/),
-[Xiaowei Zhou](https://xzhou.me/)  
-> SIGGRAPH Asia 2024
+**MocapOS** turns a single video into 3D body **and hand** motion capture, with a
+simple desktop GUI and a **portable installer that compiles nothing** on your
+machine. It builds on [GVHMR](https://github.com/zju3dv/GVHMR) (body) and
+[HaMeR](https://github.com/geopavlakos/hamer) (hands).
 
-<p align="center">
-    <img src=docs/example_video/project_teaser.gif alt="animated" />
-</p>
+> ⚠️ **Non-commercial project.** MocapOS is free for research, learning, and
+> personal/non-profit use. It bundles components that **forbid commercial use**
+> (GVHMR, SMPL/SMPL-X/MANO) or require special licensing (YOLOv8/AGPL). See
+> [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md) before doing anything
+> commercial. The MocapOS-authored code is under
+> [PolyForm Noncommercial 1.0.0](LICENSE-MocapOS.md).
 
-## News 🔥
+---
 
-- [2025-03-08] By default not using DPVO. We implemented a SimpleVO, which is more efficient and compatible with GVHMR.
-- [2025-03-08] We added a new option `f_mm` to specify the focal length of the fullframe camera in mm.
+## Install (Windows, NVIDIA GPU)
 
-## Setup
+No Build Tools, no compiling, no `conda activate`. A pre-built environment is
+downloaded automatically and matched to your GPU.
 
-Please see [installation](docs/INSTALL.md) for details.
+1. **Clone** this repo (it is small — the heavy files are not here):
+   ```bash
+   git clone https://github.com/LokoJeans27/MocapOS.git
+   cd MocapOS
+   ```
+2. **Run** `setup.bat` (double-click, or from a normal `cmd`). It will:
+   - Detect your GPU and pick the right environment
+     (RTX 50xx → CUDA 12.8, everything older → CUDA 12.4).
+   - Download the portable env (~5 GB, **one-time**) from Hugging Face.
+   - Download + verify the public tracking models (~12 GB, hash-checked).
+   - Run a self-test and create a Desktop shortcut.
+3. **Body models (one-time, licensed):** SMPL and SMPL-X are **not** included
+   (Max Planck license). Download them yourself and point the GUI to them:
+   - SMPL-X: <https://smpl-x.is.tue.mpg.de/>
+   - SMPL: <https://smpl.is.tue.mpg.de/>
 
-## Quick Start
+When the self-test prints `RESULT: READY`, launch MocapOS from the Desktop icon.
 
-### [<img src="https://i.imgur.com/QCojoJk.png" width="30"> Google Colab demo for GVHMR](https://colab.research.google.com/drive/1N9WSchizHv2bfQqkE9Wuiegw_OT7mtGj?usp=sharing)
+### Tested GPUs
+- **CUDA 12.8** build: RTX 50xx (Blackwell). Verified on RTX 5070 Ti.
+- **CUDA 12.4** build: GTX 1000 / RTX 2000 / 3000 / 4000. Verified on GTX 1660 Ti.
 
-### [<img src="https://s2.loli.net/2024/09/15/aw3rElfQAsOkNCn.png" width="20"> HuggingFace demo for GVHMR](https://huggingface.co/spaces/LittleFrog/GVHMR)
+---
 
-### Demo
-Demo entries are provided in `tools/demo`. Use `-s` to skip visual odometry if you know the camera is static, otherwise the camera will be estimated by DPVO.
-We also provide a script `demo_folder.py` to inference a entire folder.
-```shell
-python tools/demo/demo.py --video=docs/example_video/tennis.mp4 -s
-python tools/demo/demo_folder.py -f inputs/demo/folder_in -d outputs/demo/folder_out -s
-```
-
-### Reproduce
-1. **Test**:
-To reproduce the 3DPW, RICH, and EMDB results in a single run, use the following command:
-    ```shell
-    python tools/train.py global/task=gvhmr/test_3dpw_emdb_rich exp=gvhmr/mixed/mixed ckpt_path=inputs/checkpoints/gvhmr/gvhmr_siga24_release.ckpt
-    ```
-    To test individual datasets, change `global/task` to `gvhmr/test_3dpw`, `gvhmr/test_rich`, or `gvhmr/test_emdb`.
-
-2. **Train**:
-To train the model, use the following command:
-    ```shell
-    # The gvhmr_siga24_release.ckpt is trained with 2x4090 for 420 epochs, note that different GPU settings may lead to different results.
-    python tools/train.py exp=gvhmr/mixed/mixed
-    ```
-    During training, note that we do not employ post-processing as in the test script, so the global metrics results will differ (but should still be good for comparison with baseline methods).
-
-# Citation
-
-If you find this code useful for your research, please use the following BibTeX entry.
+## How it works
 
 ```
+GitHub  (code, ~44 MB)          Hugging Face (weights, free)
+  setup.bat ───────────────►  env_cu124.tar.gz / env_cu128.tar.gz
+                              + public tracking models
+SMPL / SMPL-X ── downloaded by the user (licensed)
+```
+
+The portable environments are hosted on Hugging Face at
+[`LokoJeans/mocapos-envs`](https://huggingface.co/LokoJeans/mocapos-envs)
+and fetched by `setup.bat`. Nothing heavy ever lives in git.
+
+---
+
+## Credits & Citation
+
+MocapOS would not exist without **GVHMR** and **HaMeR**. If you use it, please cite
+the original works:
+
+```bibtex
 @inproceedings{shen2024gvhmr,
   title={World-Grounded Human Motion Recovery via Gravity-View Coordinates},
-  author={Shen, Zehong and Pi, Huaijin and Xia, Yan and Cen, Zhi and Peng, Sida and Hu, Zechen and Bao, Hujun and Hu, Ruizhen and Zhou, Xiaowei},
-  booktitle={SIGGRAPH Asia Conference Proceedings},
+  author={Shen, Zehong and Pi, Huaijin and Xia, Yan and Cen, Zhi and Peng, Sida
+          and Hu, Zechen and Bao, Hujun and Hu, Ruizhen and Zhou, Xiaowei},
+  booktitle={SIGGRAPH Asia Conference Papers},
+  year={2024}
+}
+
+@inproceedings{pavlakos2024reconstructing,
+  title={Reconstructing Hands in 3D with Transformers},
+  author={Pavlakos, Georgios and Shan, Dandan and Radosavovic, Ilija and Kanazawa,
+          Angjoo and Fouhey, David and Malik, Jitendra},
+  booktitle={CVPR},
   year={2024}
 }
 ```
 
-# Acknowledgement
+## License
 
-We thank the authors of
-[WHAM](https://github.com/yohanshin/WHAM),
-[4D-Humans](https://github.com/shubham-goel/4D-Humans),
-and [ViTPose-Pytorch](https://github.com/gpastal24/ViTPose-Pytorch) for their great works, without which our project/code would not be possible.
+- MocapOS-authored code: [PolyForm Noncommercial 1.0.0](LICENSE-MocapOS.md)
+- GVHMR (preserved): [`LICENSE`](LICENSE)
+- All bundled components: [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md)

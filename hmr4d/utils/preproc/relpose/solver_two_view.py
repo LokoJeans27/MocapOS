@@ -102,6 +102,8 @@ class PycolmapRansacTwoViewGeometrySolver:
         )
 
         # cam2_from_cam1 means T_0_to_1 in our language
+        if answer.cam2_from_cam1 is None:
+            return np.eye(4, dtype=np.float32)
         Rt = answer.cam2_from_cam1.matrix().astype(np.float32)  # shape (3, 4)
         T = np.eye(4)
         T[:3] = Rt

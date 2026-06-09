@@ -177,3 +177,21 @@ tensorboard
 
 # glove
 glove
+
+# ============================================================
+# MocapOS: model weights & portable envs are NEVER committed.
+# They live on Hugging Face and are fetched by setup.bat.
+# ============================================================
+hamer_lib/_DATA/
+envs/
+env_cu124.tar.gz
+env_cu128.tar.gz
+*.ckpt
+*.pth
+*.pt
+*.pkl
+*.npz
+*.tar.gz
+*.onnx
+*.safetensors
+MocapOS.lnk
