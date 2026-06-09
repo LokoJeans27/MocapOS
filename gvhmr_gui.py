@@ -163,6 +163,14 @@ TRANSLATIONS = {
         "open_smpl_site": "🌐 Open SMPL site",
         "import_smplx_zip": "📦 Import SMPL-X zip",
         "import_smpl_zip": "📦 Import SMPL zip",
+        "mano_step1": "1.  Open https://mano.is.tue.mpg.de/  →  register and login",
+        "mano_step2": "2.  Go to Download → click the first link:",
+        "mano_step2b": "      'Models & Code (mano_v1_2.zip)'",
+        "mano_step3": "3.  Pick the downloaded zip below (mano_v1_2.zip).",
+        "open_mano_site": "🌐 Open MANO site",
+        "import_mano_zip": "📦 Import MANO zip",
+        "setup_title": "Setup needed",
+        "setup_msg": "Some models are not installed yet:\n\n  Required (body render): {req}\n  Hands (optional): {mano}\n\nUse the importers on this Settings page to install them. Once installed, this notice won't appear again.",
         "check_gpu": "🎮 Check GPU Info",
         "open_proj": "📂 Open Project Folder",
         "console": "Console Output",
@@ -267,6 +275,14 @@ TRANSLATIONS = {
         "open_smpl_site": "🌐 Abrir sitio SMPL",
         "import_smplx_zip": "📦 Importar zip SMPL-X",
         "import_smpl_zip": "📦 Importar zip SMPL",
+        "mano_step1": "1.  Abre https://mano.is.tue.mpg.de/  →  regístrate e inicia sesión",
+        "mano_step2": "2.  Ve a Download → haz clic en el primer enlace:",
+        "mano_step2b": "      'Models & Code (mano_v1_2.zip)'",
+        "mano_step3": "3.  Selecciona el zip descargado abajo (mano_v1_2.zip).",
+        "open_mano_site": "🌐 Abrir sitio MANO",
+        "import_mano_zip": "📦 Importar zip MANO",
+        "setup_title": "Falta instalar modelos",
+        "setup_msg": "Aún faltan modelos por instalar:\n\n  Obligatorios (render del cuerpo): {req}\n  Manos (opcional): {mano}\n\nUsa los importadores de esta página de Ajustes para instalarlos. Una vez instalados, este aviso no volverá a aparecer.",
         "check_gpu": "🎮 Verificar GPU",
         "open_proj": "📂 Abrir Carpeta del Proyecto",
         "console": "Salida de Consola",
@@ -371,6 +387,14 @@ TRANSLATIONS = {
         "open_smpl_site": "🌐 Ouvrir le site SMPL",
         "import_smplx_zip": "📦 Importer le zip SMPL-X",
         "import_smpl_zip": "📦 Importer le zip SMPL",
+        "mano_step1": "1.  Ouvrez https://mano.is.tue.mpg.de/  →  inscrivez-vous et connectez-vous",
+        "mano_step2": "2.  Allez sur Download → cliquez sur le premier lien :",
+        "mano_step2b": "      'Models & Code (mano_v1_2.zip)'",
+        "mano_step3": "3.  Sélectionnez le zip téléchargé ci-dessous (mano_v1_2.zip).",
+        "open_mano_site": "🌐 Ouvrir le site MANO",
+        "import_mano_zip": "📦 Importer le zip MANO",
+        "setup_title": "Installation requise",
+        "setup_msg": "Certains modèles ne sont pas encore installés :\n\n  Requis (rendu du corps) : {req}\n  Mains (optionnel) : {mano}\n\nUtilisez les importateurs de cette page Paramètres pour les installer. Une fois installés, cet avis ne réapparaîtra plus.",
         "check_gpu": "🎮 Vérifier le GPU",
         "open_proj": "📂 Ouvrir le Dossier du Projet",
         "console": "Sortie Console",
@@ -475,6 +499,14 @@ TRANSLATIONS = {
         "open_smpl_site": "🌐 Abrir site SMPL",
         "import_smplx_zip": "📦 Importar zip SMPL-X",
         "import_smpl_zip": "📦 Importar zip SMPL",
+        "mano_step1": "1.  Abra https://mano.is.tue.mpg.de/  →  registre-se e faça login",
+        "mano_step2": "2.  Vá em Download → clique no primeiro link:",
+        "mano_step2b": "      'Models & Code (mano_v1_2.zip)'",
+        "mano_step3": "3.  Selecione o zip baixado abaixo (mano_v1_2.zip).",
+        "open_mano_site": "🌐 Abrir site MANO",
+        "import_mano_zip": "📦 Importar zip MANO",
+        "setup_title": "Instalação necessária",
+        "setup_msg": "Alguns modelos ainda não estão instalados:\n\n  Obrigatórios (render do corpo): {req}\n  Mãos (opcional): {mano}\n\nUse os importadores desta página de Configurações para instalá-los. Depois de instalados, este aviso não aparecerá mais.",
         "check_gpu": "🎮 Verificar GPU",
         "open_proj": "📂 Abrir Pasta do Projeto",
         "console": "Saída do Console",
@@ -778,7 +810,30 @@ class MocapOSApp(ctk.CTk):
         self.content.grid_rowconfigure(0, weight=1)
 
         self.current_page = None
-        self.navigate(0)
+        self._route_initial_page()
+
+    def _route_initial_page(self):
+        """First-run onboarding. If the REQUIRED body models are missing, open on the
+        Settings page (model importers) and show a notice listing what's missing, so
+        the user can install everything. Once installed, this stops and the app opens
+        normally on the Inference page (no more warning)."""
+        missing_required = []
+        if not (PROJ_ROOT / "inputs/checkpoints/body_models/smplx/SMPLX_NEUTRAL.npz").exists():
+            missing_required.append("SMPL-X")
+        if not (PROJ_ROOT / "inputs/checkpoints/body_models/smpl/SMPL_NEUTRAL.pkl").exists():
+            missing_required.append("SMPL")
+        mano_missing = not (PROJ_ROOT / "hamer_lib/_DATA/data/mano/MANO_RIGHT.pkl").exists()
+
+        if missing_required:
+            self.navigate(3)  # Settings page holds the model importers
+            req = ", ".join(missing_required)
+            mano = "MANO ✗" if mano_missing else "OK ✓"
+            self.after(350, lambda: messagebox.showwarning(
+                self._t("setup_title"),
+                self._t("setup_msg").format(req=req, mano=mano),
+            ))
+        else:
+            self.navigate(0)  # everything required is installed -> normal start
 
     # ═══════════════════════════════════════════════════════
     def _t(self, key: str) -> str:
@@ -1416,6 +1471,30 @@ class MocapOSApp(ctk.CTk):
                       text_color="#000000", font=ctk.CTkFont(weight="bold"),
                       command=self._import_smpl_zip).pack(side="left")
 
+        # MANO subsection (hands)
+        mano_frame = ctk.CTkFrame(body_inner, fg_color=Colors.INPUT_BG, corner_radius=8)
+        mano_frame.pack(fill="x", pady=(10, 4))
+        mano_path = PROJ_ROOT / "hamer_lib/_DATA/data/mano/MANO_RIGHT.pkl"
+        mano_status = "[OK]" if mano_path.exists() else "[MISSING]"
+        mano_color = Colors.SUCCESS if mano_path.exists() else Colors.ERROR
+        ctk.CTkLabel(mano_frame, text=f"  MANO (hands)  {mano_status}",
+                     text_color=mano_color, font=ctk.CTkFont(size=14, weight="bold"),
+                     anchor="w").pack(fill="x", padx=12, pady=(10, 4))
+        for key in ("mano_step1", "mano_step2", "mano_step2b", "mano_step3"):
+            ctk.CTkLabel(mano_frame, text=self._t(key),
+                         text_color=Colors.TEXT_SECONDARY, font=ctk.CTkFont(size=12),
+                         anchor="w", justify="left").pack(fill="x", padx=14, pady=1)
+        mano_btn_row = ctk.CTkFrame(mano_frame, fg_color="transparent")
+        mano_btn_row.pack(fill="x", padx=12, pady=(8, 12))
+        ctk.CTkButton(mano_btn_row, text=self._t("open_mano_site"), height=36, width=180,
+                      fg_color=Colors.MUTED, hover_color=Colors.BORDER,
+                      command=lambda: webbrowser.open("https://mano.is.tue.mpg.de/download.php")
+                      ).pack(side="left", padx=(0, 8))
+        ctk.CTkButton(mano_btn_row, text=self._t("import_mano_zip"), height=36, width=200,
+                      fg_color=Colors.ACCENT, hover_color=Colors.ACCENT_HOVER,
+                      text_color="#000000", font=ctk.CTkFont(weight="bold"),
+                      command=self._import_mano_zip).pack(side="left")
+
         btn = ctk.CTkFrame(parent, fg_color="transparent")
         btn.pack(fill="x", pady=(4, 16))
         ctk.CTkButton(btn, text=self._t("check_gpu"), height=44, width=160,
@@ -1432,6 +1511,54 @@ class MocapOSApp(ctk.CTk):
     # ═══════════════════════════════════════════════════════
     # BODY MODEL IMPORTERS
     # ═══════════════════════════════════════════════════════
+    def _import_mano_zip(self):
+        path = filedialog.askopenfilename(
+            title="Select MANO zip (mano_v1_2.zip)",
+            filetypes=[["Zip files", "*.zip"], ["All files", "*.*"]],
+        )
+        if not path:
+            return
+        target_dir = PROJ_ROOT / "hamer_lib" / "_DATA" / "data" / "mano"
+        target_dir.mkdir(parents=True, exist_ok=True)
+        wanted = {"mano_left.pkl": "MANO_LEFT.pkl",
+                  "mano_right.pkl": "MANO_RIGHT.pkl"}
+        extracted = []
+        try:
+            with zipfile.ZipFile(path) as z:
+                for info in z.infolist():
+                    if info.is_dir():
+                        continue
+                    base = os.path.basename(info.filename).lower()
+                    if base in wanted and wanted[base] not in extracted:
+                        dest = target_dir / wanted[base]
+                        with z.open(info) as src, open(dest, "wb") as out:
+                            shutil.copyfileobj(src, out)
+                        extracted.append(wanted[base])
+        except zipfile.BadZipFile:
+            messagebox.showerror("Invalid zip",
+                "The selected file is not a valid zip. Please pick the file "
+                "you downloaded from mano.is.tue.mpg.de.")
+            return
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to import MANO:\n{e}")
+            return
+
+        if extracted:
+            messagebox.showinfo(
+                "MANO imported",
+                "Extracted:\n  - " + "\n  - ".join(extracted) +
+                f"\n\nDestination: {target_dir}"
+            )
+            self.navigate(self.current_page_index, force=True)
+        else:
+            messagebox.showerror(
+                "MANO files not found",
+                "No MANO_LEFT.pkl / MANO_RIGHT.pkl found inside the zip.\n\n"
+                "Make sure you downloaded the first link:\n"
+                "  'Models & Code (mano_v1_2.zip)'\n\n"
+                "on https://mano.is.tue.mpg.de/download.php"
+            )
+
     def _import_smplx_zip(self):
         path = filedialog.askopenfilename(
             title="Select SMPL-X v1.1 zip (models_smplx_v1_1.zip)",

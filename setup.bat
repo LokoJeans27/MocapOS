@@ -132,10 +132,14 @@ if "!BODYMISSING!"=="1" (
     echo   Body models present.
 )
 if "!MANOMISSING!"=="1" (
-    echo   MANO ^(hands^) NOT included ^(Max Planck license - download once^).
-    echo   Register, download "Models ^& Code", and copy MANO_LEFT.pkl + MANO_RIGHT.pkl to:
-    echo     %APP%\hamer_lib\_DATA\data\mano\
-    echo     MANO: https://mano.is.tue.mpg.de/
+    echo   MANO ^(hands^) not found - trying to auto-install from a downloaded mano_v1_2.zip...
+    "%ENV%\python.exe" "%APP%\tools\dev\install_mano.py"
+)
+if not exist "%APP%\hamer_lib\_DATA\data\mano\MANO_RIGHT.pkl" (
+    echo   MANO ^(hands^) NOT installed ^(Max Planck license - download once^).
+    echo     1^) Register + download "Models ^& Code" ^(mano_v1_2.zip^): https://mano.is.tue.mpg.de/
+    echo     2^) Re-run setup.bat ^(auto-installs from your Downloads^/Desktop^), or run:
+    echo          env\python.exe tools\dev\install_mano.py ^<path-to-mano_v1_2.zip^>
     echo   ^(Without MANO the body still works; only hand capture is skipped.^)
 ) else (
     echo   MANO hand models present.
