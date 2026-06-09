@@ -80,12 +80,19 @@ Camera overlay + 3D global view, side by side:
 |:---:|:---:|
 | ![overlay](docs/demos/good_02_overlay.gif) | ![overlay](docs/demos/good_03_overlay.gif) |
 
-### Where it struggles
+### ❌ Failure case — where the model breaks
 
-The model isn't magic — fast, ambiguous or occluded motion drifts and hands get noisy.
-A good example of where manual cleanup would be needed:
+![FAILURE](https://img.shields.io/badge/FAILURE%20CASE%20%7C%20NOT%20a%20good%20result-critical?style=for-the-badge)
 
-![limits](docs/demos/limits_compare.gif)
+> [!CAUTION]
+> **This is a failure, not a good result.** The clip is a **pole-dance** routine: the
+> dancer hits extreme aerial / inverted poses that go **beyond what the SMPL body model
+> can represent**, so the mesh **stretches and distorts**. The model also can't reason
+> about the **pole or the spatial layout** around her, so it loses the body in space.
+> Out-of-distribution motion like this (aerial, heavily occluded, pole work) is exactly
+> where it fails — not every input works.
+
+![limits — model breaks](docs/demos/limits_compare.gif)
 
 **Full-quality MP4s:**
 [side-by-side](docs/demos/good_01_compare.mp4) ·
