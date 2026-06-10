@@ -208,7 +208,7 @@ def main():
         sys.exit(1)
 
     print(f"Loading body results: {body_path}")
-    body = torch.load(str(body_path), map_location="cpu")
+    body = torch.load(str(body_path), map_location="cpu", weights_only=False)
     params = body["smpl_params_global"]
 
     go = params["global_orient"].numpy().reshape(-1, 1, 3)
@@ -227,7 +227,7 @@ def main():
     has_hands = hand_path.exists() and not args.body_only
     if has_hands:
         print(f"Loading hand results: {hand_path}")
-        hr = torch.load(str(hand_path), map_location="cpu")
+        hr = torch.load(str(hand_path), map_location="cpu", weights_only=False)
         lh = hr["left_hand_pose"].numpy().reshape(L, 15, 3)
         rh = hr["right_hand_pose"].numpy().reshape(L, 15, 3)
 
