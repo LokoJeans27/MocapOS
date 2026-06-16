@@ -721,7 +721,7 @@ class MocapOSApp(ctk.CTk):
 
         self.process = None
         self.running = False
-        self.lang = tk.StringVar(value="en")
+        self.lang = tk.StringVar(value=self._load_lang())
 
         # Progress phase tracking
         self.current_phases = PHASE_CONFIGS["default"]
@@ -804,7 +804,7 @@ class MocapOSApp(ctk.CTk):
             text_color=Colors.TEXT,
             command=self._change_language,
         )
-        self.lang_combo.set(TRANSLATIONS["en"]["lang_name"])
+        self.lang_combo.set(TRANSLATIONS.get(self.lang.get(), TRANSLATIONS["en"])["lang_name"])
         self.lang_combo.pack(side="left", padx=(8, 0), fill="x", expand=True)
 
         # ── Content ──
@@ -843,12 +843,37 @@ class MocapOSApp(ctk.CTk):
     def _t(self, key: str) -> str:
         return TRANSLATIONS.get(self.lang.get(), TRANSLATIONS["en"]).get(key, key)
 
+    # ── Language persistence (remembered between sessions) ──────────────
+    def _lang_path(self):
+        base = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
+        return os.path.join(base, "MocapOS", "lang.txt")
+
+    def _load_lang(self):
+        try:
+            with open(self._lang_path(), encoding="utf-8") as f:
+                code = f.read().strip().lower()
+                if code in TRANSLATIONS:
+                    return code
+        except Exception:
+            pass
+        return "en"
+
+    def _save_lang(self):
+        try:
+            p = self._lang_path()
+            os.makedirs(os.path.dirname(p), exist_ok=True)
+            with open(p, "w", encoding="utf-8") as f:
+                f.write(self.lang.get())
+        except Exception:
+            pass
+
     def _change_language(self, _value=None):
         name = self.lang_combo.get()
         for code, trans in TRANSLATIONS.items():
             if trans["lang_name"] == name:
                 self.lang.set(code)
                 break
+        self._save_lang()
         # Update nav buttons text
         for i, (key, icon) in enumerate(self.nav_keys):
             self.nav_buttons[i].configure(text=f"  {icon}  {self._t(key)}")

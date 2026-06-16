@@ -112,6 +112,35 @@ BONE_MAP = {
 }
 
 
+# ── SMPL-X kinematic tree (joint name → parent joint name) ─────────
+# Used to forward-kinematic the per-joint LOCAL rotations into GLOBAL
+# (world) rotations, so retargeting works for ANY character rest pose
+# and ANY import orientation — not just Mixamo T-Pose / Y-up.
+
+SMPLX_PARENTS = {
+    "Pelvis": None,
+    "L_Hip": "Pelvis", "R_Hip": "Pelvis", "Spine1": "Pelvis",
+    "L_Knee": "L_Hip", "R_Knee": "R_Hip", "Spine2": "Spine1",
+    "L_Ankle": "L_Knee", "R_Ankle": "R_Knee", "Spine3": "Spine2",
+    "L_Foot": "L_Ankle", "R_Foot": "R_Ankle", "Neck": "Spine3",
+    "L_Collar": "Spine3", "R_Collar": "Spine3", "Head": "Neck",
+    "L_Shoulder": "L_Collar", "R_Shoulder": "R_Collar",
+    "L_Elbow": "L_Shoulder", "R_Elbow": "R_Shoulder",
+    "L_Wrist": "L_Elbow", "R_Wrist": "R_Elbow",
+    "Jaw": "Head", "L_Eye": "Head", "R_Eye": "Head",
+    "L_Index1": "L_Wrist", "L_Index2": "L_Index1", "L_Index3": "L_Index2",
+    "L_Middle1": "L_Wrist", "L_Middle2": "L_Middle1", "L_Middle3": "L_Middle2",
+    "L_Pinky1": "L_Wrist", "L_Pinky2": "L_Pinky1", "L_Pinky3": "L_Pinky2",
+    "L_Ring1": "L_Wrist", "L_Ring2": "L_Ring1", "L_Ring3": "L_Ring2",
+    "L_Thumb1": "L_Wrist", "L_Thumb2": "L_Thumb1", "L_Thumb3": "L_Thumb2",
+    "R_Index1": "R_Wrist", "R_Index2": "R_Index1", "R_Index3": "R_Index2",
+    "R_Middle1": "R_Wrist", "R_Middle2": "R_Middle1", "R_Middle3": "R_Middle2",
+    "R_Pinky1": "R_Wrist", "R_Pinky2": "R_Pinky1", "R_Pinky3": "R_Pinky2",
+    "R_Ring1": "R_Wrist", "R_Ring2": "R_Ring1", "R_Ring3": "R_Ring2",
+    "R_Thumb1": "R_Wrist", "R_Thumb2": "R_Thumb1", "R_Thumb3": "R_Thumb2",
+}
+
+
 def clean_scene():
     bpy.ops.object.select_all(action='SELECT')
     bpy.ops.object.delete()
@@ -194,15 +223,18 @@ def import_character(path):
     # Mixamo characters come in wildly different sizes (2m vs 83m).
     # We scale the armature object so the world height is ~1.7m, matching
     # SMPL-X proportions. The user can scale up/down afterwards in their DCC.
-    min_l = [float('inf')] * 3
-    max_l = [-float('inf')] * 3
+    #
+    # NOTE: height must be measured in WORLD space (Blender is Z-up after
+    # import). Measuring a fixed local axis breaks for characters whose FBX
+    # imported without the +90°X correction (armature-local is Z-up), where
+    # the local Y axis is depth, not height — that produced a bogus ~0.19m
+    # "height" and a 9× over-scale on non-T-pose/Tripo rigs.
+    bpy.context.view_layer.update()
+    zs = []
     for b in arm.data.bones:
-        for p in [b.head_local, b.tail_local]:
-            for i in range(3):
-                min_l[i] = min(min_l[i], p[i])
-                max_l[i] = max(max_l[i], p[i])
-    h_local = max_l[1] - min_l[1]
-    h_world = h_local * arm.scale[1]
+        for p in (b.head_local, b.tail_local):
+            zs.append((arm.matrix_world @ p).z)
+    h_world = (max(zs) - min(zs)) if zs else 0.0
     if h_world > 0.1 and abs(h_world - 1.7) > 0.3:
         norm = 1.7 / h_world
         arm.scale *= norm
@@ -312,24 +344,47 @@ def retarget_npz():
         print("ERROR: no bones mapped — check character is a Mixamo skeleton")
         sys.exit(1)
 
-    # ── Precompute per-bone REST-RELATIVE-TO-PARENT (3x3, in parent's frame) ──
-    # SMPL-X output is in a Y-up world. Mixamo armature-LOCAL is also Y-up
-    # (object has Rx+90° rotation). SMPL-X local rotation Ra[i] is the rotation
-    # in the parent's frame (rest=identity in SMPL-X). So in Mixamo armature
-    # local:
-    #     pose_bone.matrix = parent_pose_matrix @ rest_in_parent @ matrix_basis
-    #     We want pose_bone.matrix == world_rot_smplx[i] (FK in Y-up)
-    #     and parent_pose_matrix == world_rot_smplx[parent]
-    #     So:  matrix_basis = rest_in_parent⁻¹ @ Ra[i]
-    # rest_in_parent for bone i = bone.matrix.to_3x3()  (Blender's "matrix"
-    # property on Bone returns rest relative to parent, 3x3).
-    A_map = {}
+    # ── Precompute per-bone WORLD rest orientation ──────────────────────
+    # The retarget is done entirely in Blender WORLD space so it is robust to:
+    #   (a) the character's import orientation (armature-local Y-up vs Z-up —
+    #       Mixamo downloads vs Tripo/auto-rigged FBX import differently), and
+    #   (b) the character's rest pose (T-Pose vs A-Pose vs a relaxed/natural
+    #       bind pose, e.g. arms-down).
+    #
+    # Method: forward-kinematic the SMPL-X LOCAL joint rotations into GLOBAL
+    # (world) rotations G[i] in SMPL's Y-up world; map SMPL-Y-up → Blender-Z-up
+    # with S = Rx(+90°) (the exact orientation a standard Mixamo FBX import
+    # bakes onto the armature object); then drive each target bone's WORLD
+    # orientation as  W(t) = (S·G[i]·S⁻¹) · W_rest  and convert to a pose-bone
+    # matrix via Blender's own hierarchy solver (pose_bone.matrix), which makes
+    # it independent of the bone's individual rest axes.
+    S = Matrix.Rotation(math.radians(90), 3, 'X')   # SMPL Y-up → Blender Z-up
+    S_inv = S.inverted()
+    arm_R = char_arm.matrix_world.to_3x3()
+    arm_R_inv = arm_R.inverted()
+
+    # joint name ↔ index, and SMPL parent index per joint
+    name_to_idx = {n: i for i, n in enumerate(joint_names)}
+    parent_idx = []
+    for n in joint_names:
+        p = SMPLX_PARENTS.get(n, None)
+        parent_idx.append(name_to_idx[p] if (p is not None and p in name_to_idx) else -1)
+
+    # World rest 3x3 of each mapped target bone, plus a parent-first order.
+    W_rest = {}
+    depth = {}
     for idx, bone_name in idx_to_bone.items():
-        pb = char_arm.pose.bones.get(bone_name)
-        if pb is None:
+        b = char_arm.data.bones.get(bone_name)
+        if b is None:
             continue
-        A = pb.bone.matrix_local.to_3x3()  # bone rest in armature-local
-        A_map[idx] = (A, A.inverted())
+        W_rest[idx] = arm_R @ b.matrix_local.to_3x3()
+        d = 0
+        bb = b
+        while bb.parent is not None:
+            d += 1
+            bb = bb.parent
+        depth[idx] = d
+    apply_order = sorted(idx_to_bone.keys(), key=lambda i: depth.get(i, 0))
 
     # ── Set scene frames ────────────────────────────────────────
     frame_start = 1
@@ -338,7 +393,7 @@ def retarget_npz():
     bpy.context.scene.frame_end = frame_end
     bpy.context.scene.render.fps = fps
 
-    print("[4/5] Applying rotations...")
+    print("[4/5] Applying rotations (global-FK, rest/orientation independent)...")
     bpy.context.view_layer.objects.active = char_arm
     bpy.ops.object.mode_set(mode='POSE')
     for bone_name in idx_to_bone.values():
@@ -346,89 +401,44 @@ def retarget_npz():
         if pb:
             pb.rotation_mode = 'QUATERNION'
 
-    # Find pelvis/hips bone for translation
-    pelvis_idx = joint_names.index("Pelvis") if "Pelvis" in joint_names else 0
+    pelvis_idx = name_to_idx.get("Pelvis", 0)
     hips_bone_name = idx_to_bone.get(pelvis_idx)
 
-    char_mw = char_arm.matrix_world
-    char_mw_inv = char_mw.inverted()
-
-    # ── Axis fix: empirical knob. Pick whichever produces correct poses.
-    Rx90 = Matrix.Rotation(math.radians(90), 3, 'X')
-    Rxneg90 = Matrix.Rotation(math.radians(-90), 3, 'X')
-    Rz180 = Matrix.Rotation(math.radians(180), 3, 'Z')
-    Ry180 = Matrix.Rotation(math.radians(180), 3, 'Y')
-    Rx180 = Matrix.Rotation(math.radians(180), 3, 'X')
-    I3 = Matrix.Identity(3)
-
-    fix = args.axis_fix
-    if fix == "none":
-        Q_root, Q_root_inv, Q_chld, Q_chld_inv, Q_tr = I3, I3, I3, I3, I3
-    elif fix == "conj_x90":
-        Q_root, Q_chld, Q_tr = Rx90, Rx90, Rx90
-        Q_root_inv, Q_chld_inv = Q_root.inverted(), Q_chld.inverted()
-    elif fix == "conj_xneg90":
-        Q_root, Q_chld, Q_tr = Rxneg90, Rxneg90, Rxneg90
-        Q_root_inv, Q_chld_inv = Q_root.inverted(), Q_chld.inverted()
-    elif fix == "pre_x90":
-        # apply R only to root rotation (pre-mult), leave children alone, rotate transl
-        Q_root = Rx90; Q_root_inv = I3
-        Q_chld = I3; Q_chld_inv = I3
-        Q_tr = Rx90
-    elif fix == "pre_xneg90":
-        Q_root = Rxneg90; Q_root_inv = I3
-        Q_chld = I3; Q_chld_inv = I3
-        Q_tr = Rxneg90
-    elif fix == "conj_x90_z180":
-        # conjugate by (Rz180 @ Rx90) — useful if facing direction is flipped
-        Q = Rz180 @ Rx90
-        Q_root = Q_chld = Q
-        Q_root_inv = Q_chld_inv = Q.inverted()
-        Q_tr = Q
-    elif fix == "conj_xneg90_z180":
-        Q = Rz180 @ Rxneg90
-        Q_root = Q_chld = Q
-        Q_root_inv = Q_chld_inv = Q.inverted()
-        Q_tr = Q
-    elif fix == "conj_x90_y180":
-        Q = Ry180 @ Rx90
-        Q_root = Q_chld = Q
-        Q_root_inv = Q_chld_inv = Q.inverted()
-        Q_tr = Q
-    else:
-        Q_root, Q_root_inv, Q_chld, Q_chld_inv, Q_tr = I3, I3, I3, I3, I3
-
-    print(f"  Axis fix: {fix}")
+    char_mw_inv = char_arm.matrix_world.inverted()
 
     for f in range(L):
         bpy.context.scene.frame_set(frame_start + f)
 
-        for idx, bone_name in idx_to_bone.items():
-            aa = Vector(rot_aa[f, idx].tolist())
-            Ra_in = axis_angle_to_matrix(aa)
-            if idx == pelvis_idx:
-                Ra = Q_root @ Ra_in @ Q_root_inv
-            else:
-                Ra = Q_chld @ Ra_in @ Q_chld_inv
-            A, A_inv = A_map[idx]
-            corrected = A_inv @ Ra @ A
+        # Forward kinematics: LOCAL rotations → GLOBAL (world, SMPL Y-up).
+        G = [None] * n_joints
+        for i in range(n_joints):
+            Ri = axis_angle_to_matrix(Vector(rot_aa[f, i].tolist()))
+            p = parent_idx[i]
+            G[i] = Ri if p < 0 else (G[p] @ Ri)
+
+        # Apply per bone (parent-first) as a world-space orientation.
+        for idx in apply_order:
+            bone_name = idx_to_bone[idx]
             pb = char_arm.pose.bones.get(bone_name)
             if pb is None:
                 continue
-            pb.rotation_quaternion = corrected.to_quaternion()
+            W_t = (S @ G[idx] @ S_inv) @ W_rest[idx]      # desired Blender-world rot
+            obj_rot = arm_R_inv @ W_t                      # armature/object space
+            keep_loc = pb.matrix.to_translation()
+            pb.matrix = Matrix.Translation(keep_loc) @ obj_rot.to_4x4()
+            bpy.context.view_layer.update()
             pb.keyframe_insert(data_path="rotation_quaternion", frame=frame_start + f)
 
+        # Root translation: SMPL transl (Y-up world m) → Blender world via S.
         if hips_bone_name:
             pb = char_arm.pose.bones.get(hips_bone_name)
             if pb is not None:
-                tx, ty, tz = transl[f].tolist()
-                # SMPL-X transl is Y-up world meters. Convert to Blender Z-up
-                # (Y→Z, Z→-Y), then to armature-local via char_mw_inv.
-                # Works for any armature scale/orientation.
-                world_pos_zup = Vector((tx, -tz, ty))
-                world_pos_zup = Q_tr @ world_pos_zup
-                arm_local = (char_mw_inv @ world_pos_zup).to_3d()
-                pb.location = arm_local - pb.bone.head_local
+                world_pos = S @ Vector(transl[f].tolist())
+                obj_pos = (char_mw_inv @ world_pos).to_3d()
+                m = pb.matrix.copy()
+                m.translation = obj_pos
+                pb.matrix = m
+                bpy.context.view_layer.update()
                 pb.keyframe_insert(data_path="location", frame=frame_start + f)
 
         if (f + 1) % 60 == 0:
@@ -465,21 +475,14 @@ def retarget_npz():
                 min_world_z = z_min
     print(f"  min foot world Z across {frame_end-frame_start+1} frames: {min_world_z:.4f} m")
 
-    if hips_bone_name and abs(min_world_z) > 1e-4:
-        # Convert a "shift world Z by -min_world_z" into the armature-local
-        # delta vector — works for any armature scale & rotation.
-        world_shift = Vector((0.0, 0.0, -min_world_z))
-        # Use the 3x3 (rotation+scale) inverse — translation cancels.
-        delta_arm_local = char_arm.matrix_world.to_3x3().inverted() @ world_shift
-        hips_pb = char_arm.pose.bones[hips_bone_name]
-        for frame in range(frame_start, frame_end + 1):
-            bpy.context.scene.frame_set(frame)
-            hips_pb.location += delta_arm_local
-            hips_pb.keyframe_insert(data_path="location", frame=frame)
-        print(f"  Lifted Hips by {tuple(round(v,2) for v in delta_arm_local)} (arm-local) "
-              f"= {-min_world_z:.3f} m world Z")
-
     bpy.ops.object.mode_set(mode='OBJECT')
+
+    # Ground-snap by shifting the ARMATURE OBJECT in world Z (rest-pose &
+    # orientation independent — no per-frame bone-local math that breaks on
+    # rotated rest poses).
+    if abs(min_world_z) > 1e-4:
+        char_arm.location.z -= min_world_z
+        print(f"  Lifted armature by {-min_world_z:.3f} m world Z (ground-snap)")
 
     # ── Center on origin at frame_start (zero only X/Y, keep Z) ──
     bpy.context.scene.frame_set(frame_start)
