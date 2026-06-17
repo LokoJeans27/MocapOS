@@ -187,6 +187,36 @@ def axis_angle_to_matrix(aa):
     return Matrix.Rotation(angle, 3, axis)
 
 
+def load_canonical_rest():
+    """Canonical Mixamo T-Pose bone rest orientations (armature-local, Y-up),
+    from tools/dev/mixamo_template.py.
+
+    Retargeting must reproduce the SAME absolute pose on every character. We do
+    that by expressing the SMPL motion as a world delta from rest and applying
+    it to the *canonical* Mixamo T-Pose rest — NOT the character's own bind
+    pose. Using the character's own rest only transfers the *relative* motion,
+    so a rig exported in a relaxed/natural bind (e.g. arms-down) ends up with
+    its arms offset from the true pose. The canonical rest removes that offset.
+
+    Returns {bone_name: mathutils.Matrix(3x3)} or {} if the template is missing.
+    """
+    try:
+        import importlib.util
+        here = os.path.dirname(os.path.abspath(__file__))
+        tpath = os.path.join(here, "..", "dev", "mixamo_template.py")
+        spec = importlib.util.spec_from_file_location("mixamo_template", tpath)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        out = {}
+        for b in mod.MIXAMO_BONES:
+            r = b["rest_world_3x3"]
+            out[b["name"]] = Matrix((r[0], r[1], r[2]))
+        return out
+    except Exception as e:
+        print(f"  (canonical template unavailable: {e} — using character rest)")
+        return {}
+
+
 def import_character(path):
     print("[1/5] Importing character...")
     ext = os.path.splitext(path)[1].lower()
@@ -370,6 +400,13 @@ def retarget_npz():
         p = SMPLX_PARENTS.get(n, None)
         parent_idx.append(name_to_idx[p] if (p is not None and p in name_to_idx) else -1)
 
+    # Canonical Mixamo T-Pose rest (armature-local, Y-up) → Blender-world rest
+    # via S. Falls back to the character's own bind pose if the template is
+    # missing (then motion is transferred relative to that bind).
+    canon = load_canonical_rest()
+    if canon:
+        print(f"  Using canonical Mixamo T-Pose rest ({len(canon)} bones) for absolute pose")
+
     # World rest 3x3 of each mapped target bone, plus a parent-first order.
     W_rest = {}
     depth = {}
@@ -377,7 +414,12 @@ def retarget_npz():
         b = char_arm.data.bones.get(bone_name)
         if b is None:
             continue
-        W_rest[idx] = arm_R @ b.matrix_local.to_3x3()
+        mixamo_name = BONE_MAP.get(joint_names[idx])
+        if canon and mixamo_name in canon:
+            # Canonical T-Pose rest in Blender world = S · C_local.
+            W_rest[idx] = S @ canon[mixamo_name]
+        else:
+            W_rest[idx] = arm_R @ b.matrix_local.to_3x3()
         d = 0
         bb = b
         while bb.parent is not None:
