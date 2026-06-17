@@ -277,8 +277,9 @@ def import_character(path):
 
 
 def check_rest_pose(char_arm):
-    """Informative only — user must provide A-pose character."""
-    print("  (A-Pose character assumed — T-Pose will produce incorrect results)")
+    """Informative only — any rest pose is supported (see retarget_npz)."""
+    print("  (Any rest pose supported — pose matched in absolute space "
+          "via canonical Mixamo T-Pose reference)")
 
 
 def export_result(char_arm, output_path, frame_start, frame_end):
