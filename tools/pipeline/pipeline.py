@@ -343,3 +343,17 @@ if __name__ == "__main__":
                 Log.info(f"[Render] Skipped: PyTorch3D GPU rasterization not available. Motion capture data saved successfully to {paths.hmr4d_results}")
             else:
                 raise
+
+    # ===== Auto-export previewed mesh to rigged FBX + Alembic (incam & global) ===== #
+    # Exports the SMPL body you see over the video. Never fails the run.
+    try:
+        import importlib.util
+        _mesh_py = Path(__file__).resolve().parents[1] / "export" / "export_mesh.py"
+        _spec = importlib.util.spec_from_file_location("export_mesh", str(_mesh_py))
+        _mod = importlib.util.module_from_spec(_spec)
+        _spec.loader.exec_module(_mod)
+        results_dir = Path(paths.hmr4d_results).parent
+        Log.info("[Mesh Export] Exporting previewed mesh to FBX + Alembic (incam & global)...")
+        _mod.run_export(results_dir)
+    except Exception as e:
+        Log.info(f"[Mesh Export] Skipped (non-fatal): {e}")

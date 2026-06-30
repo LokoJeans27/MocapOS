@@ -883,6 +883,20 @@ if __name__ == "__main__":
             Log.info(f"[Cleanup] Removing obsolete render: {mp4_file.name}")
             mp4_file.unlink()
 
+    # ===== Auto-export previewed mesh to rigged FBX + Alembic (incam & global) ===== #
+    # Body mesh (fingers not yet included in the exported mesh). Never fails the run.
+    try:
+        import importlib.util
+        _mesh_py = Path(__file__).resolve().parents[1] / "export" / "export_mesh.py"
+        _spec = importlib.util.spec_from_file_location("export_mesh", str(_mesh_py))
+        _mod = importlib.util.module_from_spec(_spec)
+        _spec.loader.exec_module(_mod)
+        results_dir = Path(cfg.paths.hmr4d_results).parent
+        Log.info("[Mesh Export] Exporting previewed mesh to FBX + Alembic (incam & global)...")
+        _mod.run_export(results_dir)
+    except Exception as e:
+        Log.info(f"[Mesh Export] Skipped (non-fatal): {e}")
+
     Log.info("=" * 60)
     Log.info(f"[Done!] Output: {merged_path}")
     Log.info(f"  Incam:  {incam_path}")
