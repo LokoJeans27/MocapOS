@@ -50,6 +50,26 @@ SPACES = {
     "global": "smpl_params_global",
 }
 
+# SMPL-X 55-joint skeleton (used in hands mode so fingers articulate)
+SMPLX_55_NAMES = [
+    "Pelvis", "L_Hip", "R_Hip", "Spine1", "L_Knee", "R_Knee",
+    "Spine2", "L_Ankle", "R_Ankle", "Spine3", "L_Foot", "R_Foot",
+    "Neck", "L_Collar", "R_Collar", "Head", "L_Shoulder", "R_Shoulder",
+    "L_Elbow", "R_Elbow", "L_Wrist", "R_Wrist", "Jaw", "L_Eye", "R_Eye",
+    "L_Index1", "L_Index2", "L_Index3", "L_Middle1", "L_Middle2", "L_Middle3",
+    "L_Pinky1", "L_Pinky2", "L_Pinky3", "L_Ring1", "L_Ring2", "L_Ring3",
+    "L_Thumb1", "L_Thumb2", "L_Thumb3",
+    "R_Index1", "R_Index2", "R_Index3", "R_Middle1", "R_Middle2", "R_Middle3",
+    "R_Pinky1", "R_Pinky2", "R_Pinky3", "R_Ring1", "R_Ring2", "R_Ring3",
+    "R_Thumb1", "R_Thumb2", "R_Thumb3",
+]
+
+# FK chains / indices for the HaMeR wrist fix (must match tools/pipeline/pipeline_fullbody.py)
+LEFT_ARM_CHAIN = [2, 5, 8, 12, 15, 17]
+RIGHT_ARM_CHAIN = [2, 5, 8, 13, 16, 18]
+LEFT_WRIST_IDX = 19   # index into the 21 body-pose joints
+RIGHT_WRIST_IDX = 20
+
 
 def find_blender(explicit=None):
     """Locate blender.exe. Same strategy as the GUI's _detect_blender()."""
@@ -162,6 +182,111 @@ def _build_npz_for_space(model, params, npz_path, fps, chunk=200):
     return L
 
 
+def _smplx_verts(model, full_pose_aa, betas, transl):
+    """SMPL-X LBS with a full 55-joint axis-angle pose (lets us inject finger
+    poses). Matches SmplxLite.forward exactly (validated to 0 diff)."""
+    from pytorch3d.transforms import axis_angle_to_matrix
+    from hmr4d.utils.body_model.smplx_lite import batch_rigid_transform_v2
+    from einops import einsum as E
+    rot = axis_angle_to_matrix(full_pose_aa)                 # (L,55,3,3)
+    J = model.get_skeleton(betas)                            # (L,55,3)
+    A = batch_rigid_transform_v2(rot, J, model.parents)[1]
+    eye = rot.new_tensor([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
+    pf = (rot[:, 1:] - eye).reshape(rot.shape[0], -1)
+    v_posed = (model.v_template
+               + E(betas, model.shapedirs, "l k, v c k -> l v c")
+               + E(pf, model.posedirs, "l k, k v c -> l v c"))
+    Tm = E(model.lbs_weights, A, "v j, l j c d -> l v c d")
+    verts = E(Tm[..., :3, :3], v_posed, "l v c d, l v d -> l v c") + Tm[..., :3, 3]
+    return verts + transl[:, None, :]
+
+
+def _clamp_wrist_aa(aa, fallback, max_angle=0.5, comp_max=0.4):
+    if torch.norm(aa) > max_angle or torch.any(torch.abs(aa) > comp_max):
+        return fallback
+    return aa
+
+
+def _compute_wrist_aa(incam_params, hr):
+    """Replicates pipeline_fullbody.compute_wrist_rotations so the exported wrists
+    match the hand-mode preview exactly."""
+    from pytorch3d.transforms import axis_angle_to_matrix, matrix_to_axis_angle
+    lwo = hr.get("left_wrist_orient")
+    rwo = hr.get("right_wrist_orient")
+    go = incam_params["global_orient"].cpu().reshape(-1, 3).float()
+    bp = incam_params["body_pose"].cpu().reshape(-1, 21, 3).float()
+    L = len(go)
+    if lwo is None or rwo is None:
+        return bp[:, LEFT_WRIST_IDX].clone(), bp[:, RIGHT_WRIST_IDX].clone()
+    lwo = lwo.cpu().float(); rwo = rwo.cpu().float()
+    R_root = axis_angle_to_matrix(go)
+    R_body = axis_angle_to_matrix(bp.reshape(-1, 3)).reshape(L, 21, 3, 3)
+    law = torch.zeros(L, 3); raw = torch.zeros(L, 3)
+    for i in range(L):
+        if lwo[i].abs().sum() > 0.1:
+            G = R_root[i]
+            for k in LEFT_ARM_CHAIN:
+                G = G @ R_body[i, k]
+            aa = matrix_to_axis_angle((G.T @ lwo[i]).unsqueeze(0))[0]
+            law[i] = _clamp_wrist_aa(aa, bp[i, LEFT_WRIST_IDX])
+        else:
+            law[i] = bp[i, LEFT_WRIST_IDX]
+        if rwo[i].abs().sum() > 0.1:
+            G = R_root[i]
+            for k in RIGHT_ARM_CHAIN:
+                G = G @ R_body[i, k]
+            aa = matrix_to_axis_angle((G.T @ rwo[i]).unsqueeze(0))[0]
+            raw[i] = _clamp_wrist_aa(aa, bp[i, RIGHT_WRIST_IDX])
+        else:
+            raw[i] = bp[i, RIGHT_WRIST_IDX]
+    return law, raw
+
+
+def _build_npz_smplx(model, params, hr, law, raw, npz_path, fps, chunk=100):
+    """Hands mode: build exact articulated SMPL-X mesh + 55-joint rig cache."""
+    L, go, bp63, tr, betas = _extract_params(params)
+    lhp = _as_tensor(hr["left_hand_pose"], 45).reshape(-1, 15, 3)
+    rhp = _as_tensor(hr["right_hand_pose"], 45).reshape(-1, 15, 3)
+
+    # Full 55-joint local axis-angle pose
+    pose = torch.zeros(L, 55, 3)
+    pose[:, 0] = go
+    pose[:, 1:22] = bp63.reshape(L, 21, 3)
+    pose[:, 1 + LEFT_WRIST_IDX] = law          # HaMeR wrist fix (same as preview)
+    pose[:, 1 + RIGHT_WRIST_IDX] = raw
+    # joints 22-24 (jaw, eyes) stay zero
+    pose[:, 25:40] = lhp
+    pose[:, 40:55] = rhp
+
+    betas0 = betas[:1]
+    with torch.no_grad():
+        rest_joints = model.get_skeleton(betas0)[0].cpu().numpy()
+        rest_verts = _smplx_verts(model, torch.zeros(1, 55, 3), betas0, torch.zeros(1, 3))[0].cpu().numpy()
+
+    V = rest_verts.shape[0]
+    verts = np.empty((L, V, 3), dtype=np.float32)
+    with torch.no_grad():
+        for s in range(0, L, chunk):
+            e = min(s + chunk, L)
+            verts[s:e] = _smplx_verts(model, pose[s:e], betas[s:e], tr[s:e]).cpu().numpy()
+
+    parents = model.parents.cpu().numpy().astype(np.int64); parents[0] = -1
+    np.savez_compressed(
+        npz_path,
+        faces=np.asarray(model.faces).astype(np.int64),
+        weights=model.lbs_weights.cpu().numpy().astype(np.float32),
+        parents=parents,
+        joint_names=np.array(SMPLX_55_NAMES),
+        rest_joints=rest_joints.astype(np.float32),
+        rest_verts=rest_verts.astype(np.float32),
+        pose=pose.numpy().astype(np.float32),
+        transl=tr.numpy().astype(np.float32),
+        verts=verts,
+        fps=np.array([fps], dtype=np.float32),
+    )
+    return L
+
+
 def run_export(results_dir, blender=None, fps=30, keep_npz=False):
     """
     Main entry point. Reads hmr4d_results.pt from results_dir and writes the
@@ -175,16 +300,27 @@ def run_export(results_dir, blender=None, fps=30, keep_npz=False):
         print(f"[Mesh Export] hmr4d_results.pt not found in {results_dir}, skipping.")
         return False
 
-    # SmplLite = native SMPL model (6890 verts, 24-bone rig, clean skin weights)
-    try:
-        from hmr4d.utils.body_model.smpl_lite import SmplLite
-        model = SmplLite(model_path=str(GVHMR_ROOT / "inputs/checkpoints/body_models/smpl")).eval()
-    except Exception as e:
-        print(f"[Mesh Export] Could not load SMPL model ({e}).")
-        print("[Mesh Export] Make sure inputs/checkpoints/body_models/smpl/SMPL_NEUTRAL.pkl exists.")
-        return False
-
     pred = torch.load(str(pt_path), map_location="cpu", weights_only=False)
+
+    # Hands mode: if HaMeR results exist, export an articulated SMPL-X mesh
+    # (10475 verts, 55-bone rig with fingers). Otherwise the body SMPL mesh.
+    hand_path = results_dir / "hand_results.pt"
+    hands = hand_path.exists()
+    law = raw = hr = None
+    try:
+        if hands:
+            from hmr4d.utils.body_model.smplx_lite import SmplxLite
+            model = SmplxLite(model_path=str(GVHMR_ROOT / "inputs/checkpoints/body_models/smplx")).eval()
+            hr = torch.load(str(hand_path), map_location="cpu", weights_only=False)
+            law, raw = _compute_wrist_aa(pred["smpl_params_incam"], hr)
+            print("[Mesh Export] Hands detected -> exporting articulated SMPL-X mesh (fingers).")
+        else:
+            from hmr4d.utils.body_model.smpl_lite import SmplLite
+            model = SmplLite(model_path=str(GVHMR_ROOT / "inputs/checkpoints/body_models/smpl")).eval()
+    except Exception as e:
+        print(f"[Mesh Export] Could not load body model ({e}).")
+        print("[Mesh Export] Need inputs/checkpoints/body_models/{smpl/SMPL_NEUTRAL.pkl | smplx/SMPLX_NEUTRAL.npz}.")
+        return False
 
     blender_exe = find_blender(blender)
     stem = results_dir.name
@@ -197,7 +333,10 @@ def run_export(results_dir, blender=None, fps=30, keep_npz=False):
 
         npz_path = results_dir / f"_meshcache_{space}.npz"
         print(f"[Mesh Export] Building {space} mesh cache...")
-        L = _build_npz_for_space(model, pred[key], npz_path, fps)
+        if hands:
+            L = _build_npz_smplx(model, pred[key], hr, law, raw, npz_path, fps)
+        else:
+            L = _build_npz_for_space(model, pred[key], npz_path, fps)
 
         fbx_path = results_dir / f"{stem}_mesh_{space}.fbx"
         abc_path = results_dir / f"{stem}_mesh_{space}.abc"
