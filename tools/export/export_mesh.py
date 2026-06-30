@@ -1,21 +1,22 @@
 """
-Export the SMPL body mesh you see in the MocapOS preview (the gray human overlaid
-on the video) to riggable 3D files.
+Export the body mesh you see in the MocapOS preview (the gray human overlaid on
+the video) to Alembic (.abc) — an exact, animated vertex cache of the mesh.
 
-For each result it writes, into the same results folder, FOUR files:
+For each result it writes, into the same results folder, TWO files:
 
-    <video>_mesh_incam.fbx    rigged SMPL (armature + skin), CAMERA space  (matches the plate / incam preview)
-    <video>_mesh_global.fbx   rigged SMPL (armature + skin), WORLD space   (clean animation for Blender/Maya/Unreal)
-    <video>_mesh_incam.abc    Alembic vertex cache (exact mesh, no rig), CAMERA space
-    <video>_mesh_global.abc   Alembic vertex cache (exact mesh, no rig), WORLD space
+    <video>_mesh_incam.abc    exact mesh per frame, CAMERA space (matches the plate / incam preview)
+    <video>_mesh_global.abc   exact mesh per frame, WORLD space  (character in a clean scene)
 
 "incam"  = same space as inputs/<video>/incam.mp4  -> sits exactly on top of the original footage (VFX / Nuke).
-"global" = same space as global.mp4                -> world-space animation, character standing in a clean scene.
+"global" = same space as global.mp4                -> world-space, character standing in a clean scene.
 
-This module runs inside the gvhmr conda env: it rebuilds the exact SMPL vertices
-(via SmplLite, the same body model used for the preview) plus the 24-bone skeleton
-and skinning weights, dumps them to a temporary .npz, and then calls Blender headless
-(tools/export/export_mesh_blender.py) to actually write the .fbx / .abc.
+When the result includes hands (Full Body + Hands), the mesh is the articulated
+SMPL-X body (with fingers); otherwise it is the SMPL body.
+
+This module runs inside the gvhmr conda env: it rebuilds the exact vertices (via
+SmplLite / SmplxLite, the same body models used for the preview), dumps them to a
+temporary .npz, and then calls Blender headless (tools/export/export_mesh_blender.py)
+to write the Alembic.
 
 Usage (standalone):
     python tools/export/export_mesh.py --results_dir outputs/results/MY_VIDEO
@@ -123,7 +124,7 @@ def _extract_params(params):
 
 
 def _build_npz_for_space(model, params, npz_path, fps, chunk=200):
-    """Compute exact verts + rig data for one space and save to npz_path."""
+    """Compute the exact per-frame SMPL mesh for one space and save to npz_path."""
     L, go, bp, tr, betas = _extract_params(params)
 
     # GVHMR/SMPLX body_pose covers 21 joints (63). The native SMPL model expects
@@ -131,19 +132,10 @@ def _build_npz_for_space(model, params, npz_path, fps, chunk=200):
     def pad_body_pose(bp_):
         return torch.cat([bp_, torch.zeros(bp_.shape[0], 6)], dim=-1)
 
-    # Rest pose (zero pose, mean shape) for the rig: bone positions + un-posed mesh
-    betas0 = betas[:1]
-    with torch.no_grad():
-        rest_joints = model.get_skeleton(betas0)[0].cpu().numpy()                # (24, 3)
-        rest_verts = model(
-            body_pose=torch.zeros(1, 69),
-            betas=betas0,
-            global_orient=torch.zeros(1, 3),
-            transl=torch.zeros(1, 3),
-        )[0].cpu().numpy()                                                        # (6890, 3)
-
     # Exact deformed vertices per frame (this is literally the previewed mesh)
-    verts = np.empty((L, rest_verts.shape[0], 3), dtype=np.float32)
+    faces = np.asarray(model.faces).astype(np.int64)
+    V = model.v_template.shape[0]
+    verts = np.empty((L, V, 3), dtype=np.float32)
     with torch.no_grad():
         for s in range(0, L, chunk):
             e = min(s + chunk, L)
@@ -155,27 +147,9 @@ def _build_npz_for_space(model, params, npz_path, fps, chunk=200):
             )
             verts[s:e] = v.cpu().numpy()
 
-    # 24-joint local axis-angle pose: [global_orient, body_pose(21), 0, 0]
-    pose = np.zeros((L, 24, 3), dtype=np.float32)
-    pose[:, 0, :] = go.numpy()
-    pose[:, 1:22, :] = bp.numpy().reshape(L, 21, 3)
-    # joints 22,23 (hands) stay zero
-
-    parents = model.parents.cpu().numpy().astype(np.int64)
-    parents[0] = -1
-    weights = model.lbs_weights.cpu().numpy().astype(np.float32)                 # (6890, 24)
-    faces = np.asarray(model.faces).astype(np.int64)                            # (F, 3)
-
     np.savez_compressed(
         npz_path,
         faces=faces,
-        weights=weights,
-        parents=parents,
-        joint_names=np.array(SMPL_24_NAMES),
-        rest_joints=rest_joints.astype(np.float32),
-        rest_verts=rest_verts.astype(np.float32),
-        pose=pose,
-        transl=tr.numpy().astype(np.float32),
         verts=verts,
         fps=np.array([fps], dtype=np.float32),
     )
@@ -243,12 +217,12 @@ def _compute_wrist_aa(incam_params, hr):
 
 
 def _build_npz_smplx(model, params, hr, law, raw, npz_path, fps, chunk=100):
-    """Hands mode: build exact articulated SMPL-X mesh + 55-joint rig cache."""
+    """Hands mode: build the exact articulated SMPL-X mesh (with fingers) per frame."""
     L, go, bp63, tr, betas = _extract_params(params)
     lhp = _as_tensor(hr["left_hand_pose"], 45).reshape(-1, 15, 3)
     rhp = _as_tensor(hr["right_hand_pose"], 45).reshape(-1, 15, 3)
 
-    # Full 55-joint local axis-angle pose
+    # Full 55-joint local axis-angle pose (body + HaMeR fingers + wrist fix)
     pose = torch.zeros(L, 55, 3)
     pose[:, 0] = go
     pose[:, 1:22] = bp63.reshape(L, 21, 3)
@@ -258,29 +232,17 @@ def _build_npz_smplx(model, params, hr, law, raw, npz_path, fps, chunk=100):
     pose[:, 25:40] = lhp
     pose[:, 40:55] = rhp
 
-    betas0 = betas[:1]
-    with torch.no_grad():
-        rest_joints = model.get_skeleton(betas0)[0].cpu().numpy()
-        rest_verts = _smplx_verts(model, torch.zeros(1, 55, 3), betas0, torch.zeros(1, 3))[0].cpu().numpy()
-
-    V = rest_verts.shape[0]
+    faces = np.asarray(model.faces).astype(np.int64)
+    V = model.v_template.shape[0]
     verts = np.empty((L, V, 3), dtype=np.float32)
     with torch.no_grad():
         for s in range(0, L, chunk):
             e = min(s + chunk, L)
             verts[s:e] = _smplx_verts(model, pose[s:e], betas[s:e], tr[s:e]).cpu().numpy()
 
-    parents = model.parents.cpu().numpy().astype(np.int64); parents[0] = -1
     np.savez_compressed(
         npz_path,
-        faces=np.asarray(model.faces).astype(np.int64),
-        weights=model.lbs_weights.cpu().numpy().astype(np.float32),
-        parents=parents,
-        joint_names=np.array(SMPLX_55_NAMES),
-        rest_joints=rest_joints.astype(np.float32),
-        rest_verts=rest_verts.astype(np.float32),
-        pose=pose.numpy().astype(np.float32),
-        transl=tr.numpy().astype(np.float32),
+        faces=faces,
         verts=verts,
         fps=np.array([fps], dtype=np.float32),
     )
@@ -290,7 +252,7 @@ def _build_npz_smplx(model, params, hr, law, raw, npz_path, fps, chunk=100):
 def run_export(results_dir, blender=None, fps=30, keep_npz=False):
     """
     Main entry point. Reads hmr4d_results.pt from results_dir and writes the
-    rigged FBX + Alembic for both incam and global spaces.
+    Alembic (.abc) mesh cache for both incam and global spaces.
 
     Returns True if at least one Blender export succeeded.
     """
@@ -338,11 +300,10 @@ def run_export(results_dir, blender=None, fps=30, keep_npz=False):
         else:
             L = _build_npz_for_space(model, pred[key], npz_path, fps)
 
-        fbx_path = results_dir / f"{stem}_mesh_{space}.fbx"
         abc_path = results_dir / f"{stem}_mesh_{space}.abc"
 
         if not blender_exe:
-            print("[Mesh Export] Blender not found. Mesh cache saved (.npz) but FBX/ABC not written.")
+            print("[Mesh Export] Blender not found. Mesh cache saved (.npz) but Alembic not written.")
             print("[Mesh Export] Install Blender or pass --blender, then re-run this script.")
             continue
 
@@ -350,10 +311,9 @@ def run_export(results_dir, blender=None, fps=30, keep_npz=False):
         cmd = [
             blender_exe, "--background", "--python", str(blender_script), "--",
             "--npz", str(npz_path),
-            "--fbx", str(fbx_path),
             "--abc", str(abc_path),
         ]
-        print(f"[Mesh Export] Blender -> {fbx_path.name} + {abc_path.name}  ({L} frames)")
+        print(f"[Mesh Export] Blender -> {abc_path.name}  ({L} frames)")
         try:
             res = subprocess.run(cmd, capture_output=True, text=True)
             if res.returncode != 0:
@@ -362,7 +322,7 @@ def run_export(results_dir, blender=None, fps=30, keep_npz=False):
                 print(res.stderr[-2000:])
             else:
                 any_ok = True
-                print(f"[Mesh Export] OK: {fbx_path.name}, {abc_path.name}")
+                print(f"[Mesh Export] OK: {abc_path.name}")
         except Exception as e:
             print(f"[Mesh Export] Error running Blender for {space}: {e}")
 
@@ -378,7 +338,7 @@ def run_export(results_dir, blender=None, fps=30, keep_npz=False):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Export the previewed SMPL mesh to rigged FBX + Alembic")
+    parser = argparse.ArgumentParser(description="Export the previewed body mesh to Alembic (.abc)")
     parser.add_argument("--results_dir", required=True,
                         help="Folder containing hmr4d_results.pt (e.g. outputs/results/MY_VIDEO)")
     parser.add_argument("--blender", default=None, help="Path to blender.exe (auto-detected if omitted)")

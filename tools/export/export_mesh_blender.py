@@ -2,43 +2,28 @@
 Runs INSIDE Blender (headless):
 
     blender --background --python tools/export/export_mesh_blender.py -- \
-        --npz  cache.npz  --fbx out.fbx  --abc out.abc
+        --npz cache.npz  --abc out.abc
 
-Reads a mesh-cache .npz produced by tools/export/export_mesh.py and writes:
-  * a RIGGED SMPL character (24-bone armature + skinned mesh + baked animation) -> FBX
-  * an EXACT vertex-cache of the same body (no rig)                              -> Alembic (.abc)
+Reads a mesh-cache .npz produced by tools/export/export_mesh.py and writes an
+exact per-frame vertex cache (the body you see in the MocapOS preview) to
+Alembic (.abc). No rig: the .abc carries the deforming mesh exactly.
 
-The .npz holds (native SMPL Y-up, meters):
-    faces        (F,3) int
-    weights      (V,24) float   skinning weights
-    parents      (24,)  int     kintree, parents[0] = -1
-    joint_names  (24,)  str
-    rest_joints  (24,3) float   zero-pose joint positions (bone heads)
-    rest_verts   (V,3)  float   un-posed mesh
-    pose         (L,24,3) float local axis-angle per joint per frame
-    transl       (L,3)  float   root translation per frame
-    verts        (L,V,3) float  exact deformed mesh per frame (the previewed body)
-    fps          (1,)   float
-
-SMPL is Y-up; Blender is Z-up. We keep all data in native Y-up and stand the
-objects upright with a +90deg X object rotation, baked on export.
+The .npz holds (native SMPL/SMPL-X Y-up, metres):
+    faces  (F,3) int
+    verts  (L,V,3) float   exact deformed mesh per frame (the previewed body)
+    fps    (1,)   float
+(other fields may be present but are unused here).
 """
 
 import sys
-import math
 
 import numpy as np
 
 try:
     import bpy
-    from mathutils import Vector, Quaternion, Euler
 except ImportError:
     print("ERROR: this script must be run inside Blender (blender --background --python ...).")
     sys.exit(1)
-
-
-# Y-up (SMPL) -> Z-up (Blender), applied as an object-level rotation and baked on export
-STAND_UP = Euler((math.radians(90.0), 0.0, 0.0), "XYZ")
 
 
 def parse_args():
@@ -47,7 +32,6 @@ def parse_args():
     import argparse
     p = argparse.ArgumentParser()
     p.add_argument("--npz", required=True)
-    p.add_argument("--fbx", required=True)
     p.add_argument("--abc", required=True)
     return p.parse_args(argv)
 
@@ -63,137 +47,13 @@ def clear_scene():
                 pass
 
 
-def aa_to_quat(aa):
-    """axis-angle (3,) -> mathutils.Quaternion (relative to identity rest)."""
-    angle = float(np.linalg.norm(aa))
-    if angle < 1e-8:
-        return Quaternion((1.0, 0.0, 0.0, 0.0))
-    axis = Vector((float(aa[0]), float(aa[1]), float(aa[2]))) / angle
-    return Quaternion(axis, angle)
-
-
-def build_armature(rest_joints, parents, names):
-    """Armature whose bones are all world-axis-aligned (identity rest orientation),
-    so SMPL local axis-angle maps directly to pose_bone.rotation_quaternion."""
-    arm_data = bpy.data.armatures.new("SMPL_Armature")
-    arm_obj = bpy.data.objects.new("SMPL_Armature", arm_data)
-    bpy.context.collection.objects.link(arm_obj)
-
-    bpy.context.view_layer.objects.active = arm_obj
-    bpy.ops.object.mode_set(mode="EDIT")
-
-    ebones = []
-    for j, name in enumerate(names):
-        b = arm_data.edit_bones.new(name)
-        head = Vector((float(rest_joints[j][0]), float(rest_joints[j][1]), float(rest_joints[j][2])))
-        b.head = head
-        b.tail = head + Vector((0.0, 0.05, 0.0))   # +Y, roll 0 -> identity bone matrix
-        b.roll = 0.0
-        ebones.append(b)
-
-    for j in range(len(names)):
-        p = int(parents[j])
-        if p >= 0:
-            ebones[j].parent = ebones[p]
-            ebones[j].use_connect = False
-
-    bpy.ops.object.mode_set(mode="OBJECT")
-    return arm_obj
-
-
-def build_skinned_mesh(rest_verts, faces, weights, names, arm_obj):
-    """Mesh at rest pose, bound to the armature via per-bone vertex groups."""
-    mesh = bpy.data.meshes.new("SMPL_Mesh")
-    verts = [tuple(map(float, v)) for v in rest_verts]
-    polys = [tuple(map(int, f)) for f in faces]
-    mesh.from_pydata(verts, [], polys)
-    mesh.update()
-
-    obj = bpy.data.objects.new("SMPL_Mesh", mesh)
-    bpy.context.collection.objects.link(obj)
-
-    # vertex groups + weights (one group per bone)
-    groups = [obj.vertex_groups.new(name=n) for n in names]
-    for j, vg in enumerate(groups):
-        wj = weights[:, j]
-        for vi in np.nonzero(wj > 1e-6)[0]:
-            vg.add([int(vi)], float(wj[vi]), "REPLACE")
-
-    mod = obj.modifiers.new(name="Armature", type="ARMATURE")
-    mod.object = arm_obj
-    mod.use_vertex_groups = True
-    # No object parenting: the Armature modifier alone binds the skin. This keeps
-    # mesh and armature as independent top-level objects so we can bake the
-    # stand-up rotation into both cleanly on export.
-    return obj
-
-
-def animate(arm_obj, pose, transl, fps):
-    L = pose.shape[0]
-    scene = bpy.context.scene
-    scene.render.fps = int(round(fps))
-    scene.frame_start = 0
-    scene.frame_end = L - 1
-
-    bpy.context.view_layer.objects.active = arm_obj
-    bpy.ops.object.mode_set(mode="POSE")
-    pbones = arm_obj.pose.bones
-    for pb in pbones:
-        pb.rotation_mode = "QUATERNION"
-
-    nb = pose.shape[1]
-    for f in range(L):
-        scene.frame_set(f)
-        for j in range(nb):
-            pb = pbones[j]
-            pb.rotation_quaternion = aa_to_quat(pose[f, j])
-            pb.keyframe_insert("rotation_quaternion", frame=f)
-            if j == 0:  # root translation (identity rest -> world-aligned offset)
-                pb.location = Vector((float(transl[f, 0]), float(transl[f, 1]), float(transl[f, 2])))
-                pb.keyframe_insert("location", frame=f)
-
-    bpy.ops.object.mode_set(mode="OBJECT")
-
-
-def export_fbx(arm_obj, mesh_obj, path):
-    # Stand up (Y-up SMPL -> Z-up Blender) and BAKE the rotation into the data,
-    # so there is no lingering object transform to flip/scale the mesh on import.
-    bpy.ops.object.select_all(action="DESELECT")
-    arm_obj.rotation_euler = STAND_UP
-    mesh_obj.rotation_euler = STAND_UP
-    arm_obj.select_set(True)
-    mesh_obj.select_set(True)
-    bpy.context.view_layer.objects.active = arm_obj
-    bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
-
-    # Data is now standard Z-up, metres. Export with Blender's default axis
-    # conversion (Z-up -> Y-up FBX) and NO extra space transform -> imports
-    # upright and correctly scaled in Blender/Maya/Unreal.
-    bpy.ops.export_scene.fbx(
-        filepath=path,
-        use_selection=True,
-        apply_unit_scale=True,
-        apply_scale_options="FBX_SCALE_NONE",
-        bake_space_transform=False,
-        add_leaf_bones=False,
-        bake_anim=True,
-        bake_anim_use_all_bones=True,
-        bake_anim_use_nla_strips=False,
-        bake_anim_use_all_actions=False,
-        axis_forward="-Z",
-        axis_up="Y",
-        object_types={"ARMATURE", "MESH"},
-    )
-    print(f"[Blender] FBX written: {path}")
-
-
 def export_alembic(verts, faces, fps, path):
     """Exact vertex cache: one mesh deformed per frame via keyframed shape keys
-    (the Alembic exporter evaluates these), then exported to Alembic (no rig)."""
+    (the Alembic exporter evaluates these), then exported to Alembic."""
     L = verts.shape[0]
-    # Cache is pure positions (no rig), so bake Y-up -> Z-up straight into the
-    # vertices: (x, y, z) -> (x, -z, y). Avoids relying on object transforms,
-    # which the Alembic exporter does not bake reliably.
+    # Bake Y-up -> Z-up straight into the vertices: (x, y, z) -> (x, -z, y).
+    # Avoids relying on object transforms, which the Alembic exporter does not
+    # bake reliably.
     v = verts.astype(np.float64)
     verts = np.stack([v[..., 0], -v[..., 2], v[..., 1]], axis=-1)
 
@@ -202,7 +62,6 @@ def export_alembic(verts, faces, fps, path):
     mesh.update()
     obj = bpy.data.objects.new("SMPL_Cache", mesh)
     bpy.context.collection.objects.link(obj)
-
     bpy.context.view_layer.objects.active = obj
 
     # Basis + one shape key per frame; only frame f's key is active at frame f.
@@ -249,27 +108,11 @@ def main():
     args = parse_args()
     data = np.load(args.npz, allow_pickle=True)
     faces = data["faces"]
-    weights = data["weights"]
-    parents = data["parents"]
-    names = [str(x) for x in data["joint_names"]]
-    rest_joints = data["rest_joints"]
-    rest_verts = data["rest_verts"]
-    pose = data["pose"]
-    transl = data["transl"]
     verts = data["verts"]
     fps = float(data["fps"][0])
 
     clear_scene()
-
-    # --- Rigged FBX ---
-    arm = build_armature(rest_joints, parents, names)
-    mesh_obj = build_skinned_mesh(rest_verts, faces, weights, names, arm)
-    animate(arm, pose, transl, fps)
-    export_fbx(arm, mesh_obj, args.fbx)
-
-    # --- Exact Alembic vertex cache ---
     export_alembic(verts, faces, fps, args.abc)
-
     print("[Blender] Done.")
 
 
