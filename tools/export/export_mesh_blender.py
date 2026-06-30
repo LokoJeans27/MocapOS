@@ -122,7 +122,9 @@ def build_skinned_mesh(rest_verts, faces, weights, names, arm_obj):
     mod = obj.modifiers.new(name="Armature", type="ARMATURE")
     mod.object = arm_obj
     mod.use_vertex_groups = True
-    obj.parent = arm_obj
+    # No object parenting: the Armature modifier alone binds the skin. This keeps
+    # mesh and armature as independent top-level objects so we can bake the
+    # stand-up rotation into both cleanly on export.
     return obj
 
 
@@ -154,16 +156,25 @@ def animate(arm_obj, pose, transl, fps):
 
 
 def export_fbx(arm_obj, mesh_obj, path):
-    arm_obj.rotation_euler = STAND_UP
+    # Stand up (Y-up SMPL -> Z-up Blender) and BAKE the rotation into the data,
+    # so there is no lingering object transform to flip/scale the mesh on import.
     bpy.ops.object.select_all(action="DESELECT")
+    arm_obj.rotation_euler = STAND_UP
+    mesh_obj.rotation_euler = STAND_UP
     arm_obj.select_set(True)
     mesh_obj.select_set(True)
     bpy.context.view_layer.objects.active = arm_obj
+    bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
+
+    # Data is now standard Z-up, metres. Export with Blender's default axis
+    # conversion (Z-up -> Y-up FBX) and NO extra space transform -> imports
+    # upright and correctly scaled in Blender/Maya/Unreal.
     bpy.ops.export_scene.fbx(
         filepath=path,
         use_selection=True,
         apply_unit_scale=True,
-        bake_space_transform=True,
+        apply_scale_options="FBX_SCALE_NONE",
+        bake_space_transform=False,
         add_leaf_bones=False,
         bake_anim=True,
         bake_anim_use_all_bones=True,
